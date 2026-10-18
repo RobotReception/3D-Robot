@@ -78,6 +78,8 @@ function Toolbar({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) 
       <div className="tb-group">
         <label>{t("Style")}
           <select value={core.style} onChange={(e) => void core.loadStyle(e.target.value as Style)} data-testid="style-select">
+            <option value="concierge">Concierge (realistic)</option>
+            <option value="mascot">Mascot (chibi)</option>
             <option value="premium">Premium AI</option>
             <option value="friendly">Friendly</option>
             <option value="futuristic">Futuristic</option>

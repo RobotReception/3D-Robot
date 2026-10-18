@@ -10,7 +10,13 @@ a **Control Studio** to test everything.
 > التقرير البحثي: [`docs/RESEARCH.ar.md`](docs/RESEARCH.ar.md) · التصميم: [`docs/DESIGN.md`](docs/DESIGN.md) · لوحة التحكم تدعم العربية (RTL).
 
 ![Design directions](docs/screenshots/design-directions.png)
-*Three style variants built from the same rig (friendly / futuristic / premium). Default: **Premium AI Assistant**.*
+*Three stylised variants from the same rig (friendly / futuristic / premium).*
+
+![Concierge](docs/screenshots/concierge-sheet.png)
+![Mascot](docs/screenshots/mascot-sheet.png)
+*New **Mascot**: original chibi assistant (huge head, glowing ring accents, soft ^ ^ eyes).*
+
+*New **Concierge**: detailed human-proportion receptionist (panelled shell, navy uniform, glowing ring joints, selective bloom). Default in the Studio — see [docs/DESIGN.md](docs/DESIGN.md) for an honest comparison with photo-realistic concepts.*
 
 ![Control Studio](docs/screenshots/studio-cam-full.png)
 
@@ -19,7 +25,7 @@ a **Control Studio** to test everything.
 ```bash
 npm install
 npm run dev            # Control Studio at http://localhost:5173
-npm test               # 96 unit/integration tests (headless, real GLB models)
+npm test               # 102 unit/integration tests (headless, real GLB models)
 npm run test:e2e       # 28 browser tests (Chromium + WebGL): Studio, audio lip-sync, WebSocket, R3F
 npm run build          # type-check + production build (dist/)
 ```

@@ -81,6 +81,7 @@ export class LocomotionController {
     };
     this.feet = { L: mk("L"), R: mk("R") };
     this.legLen = this.feet.L.rest.l1 + this.feet.L.rest.l2;
+    this.maxSpeed = Math.min(0.9, 1.7 * this.legLen); // short-legged characters walk slower
     this.plantFeetNeutral();
   }
 

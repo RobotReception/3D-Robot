@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 PY="${PYTHON:-python3}"
 mkdir -p public/models assets/models
-for style in friendly futuristic premium; do
+for style in friendly futuristic premium concierge mascot; do
   "$PY" blender/build_robot.py --style "$style" \
     --out "assets/models/robot_${style}.raw.glb" \
     --blend "assets/models/robot_${style}.blend" \

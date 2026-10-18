@@ -3,7 +3,7 @@ import { RobotAvatar } from "../engine/RobotAvatar";
 import { RobotViewer, type BackgroundPreset, type CameraPreset, type QualityLevel } from "../viewer/RobotViewer";
 import { JOINT_DEFS, REQUIRED_BONES } from "../engine/rig";
 
-export type Style = "friendly" | "futuristic" | "premium";
+export type Style = "friendly" | "futuristic" | "premium" | "concierge" | "mascot";
 export type GazeMode = "free" | "cursor" | "camera";
 
 export interface LogEntry {
@@ -19,7 +19,7 @@ export const assetUrl = (p: string) => `${import.meta.env.BASE_URL}${p.replace(/
 export class StudioCore {
   viewer!: RobotViewer;
   robot!: RobotAvatar;
-  style: Style = "premium";
+  style: Style = "concierge";
   selectedBone: string | null = null;
   gazeMode: GazeMode = "free";
   log: LogEntry[] = [];

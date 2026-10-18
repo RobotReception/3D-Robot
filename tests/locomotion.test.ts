@@ -63,7 +63,7 @@ describe("locomotion (IK-planted walking)", () => {
       }
     }
     expect(worstErr).toBeLessThan(0.025); // IK reaches its targets (legs have enough reach)
-    expect(minY).toBeGreaterThan(0.085 - 0.004); // ankle height above ground, i.e. soles never penetrate
+    expect(minY).toBeGreaterThan(r.joints.restWorldPos("foot_L").y - 0.004); // ankle height above ground, i.e. soles never penetrate
   });
 
   it("keeps balance: pelvis stays over the support polygon and bobs only slightly", async () => {
@@ -154,12 +154,12 @@ describe("locomotion (IK-planted walking)", () => {
   });
 
   it("works for all three styles (different leg lengths)", async () => {
-    for (const style of ["friendly", "futuristic"] as const) {
+    for (const style of ["friendly", "futuristic", "concierge", "mascot"] as const) {
       const r = await makeRobot(style);
       void r.walkTo({ x: 0, z: 2 });
-      run(r, 6);
+      run(r, 14); // the short-legged mascot walks at ~0.34 m/s
       expect(Math.abs(r.root.position.z - 2)).toBeLessThan(0.08);
-      for (const s of ["L", "R"] as const) expect(wp(r, `foot_${s}`).y).toBeGreaterThan(0.08);
+      for (const s of ["L", "R"] as const) expect(wp(r, `foot_${s}`).y).toBeGreaterThan(r.joints.restWorldPos("foot_L").y - 0.005);
     }
   });
 });

@@ -5,7 +5,7 @@ const __dir = path.dirname(fileURLToPath(import.meta.url));
 import * as THREE from "three";
 import { parseRobotGLTF, inspectRobotModel } from "../../src/engine/loader";
 
-export type RobotStyle = "friendly" | "futuristic" | "premium";
+export type RobotStyle = "friendly" | "futuristic" | "premium" | "concierge" | "mascot";
 
 export async function loadModelNode(style: RobotStyle = "premium") {
   const file = path.resolve(__dir, `../../public/models/robot_${style}.glb`);

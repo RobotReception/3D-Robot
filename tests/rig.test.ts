@@ -66,7 +66,7 @@ describe("joint space", () => {
     const a = lp(r, "foot_L");
     const b = lp(r, "foot_R");
     expect(a.x).toBeCloseTo(-b.x, 4);
-    expect(a.y).toBeCloseTo(0.085, 2);
+    expect(a.y).toBeCloseTo(r.joints.restWorldPos("foot_L").y, 2);
     expect(Math.abs(a.z)).toBeLessThan(0.01);
     const q = new THREE.Quaternion();
     r.joints.currentDelta("pelvis", q);

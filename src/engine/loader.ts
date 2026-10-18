@@ -14,6 +14,8 @@ export interface RobotModelParts {
   /** meshes by name: Eye_L, Eye_R, Mouth, Brow_L, Brow_R, Body_*, Visor, Glow */
   meshes: Map<string, THREE.Mesh>;
   materials: Map<string, THREE.Material>;
+  /** emotion the character rests in (glTF extras `default_emotion` on the armature), e.g. "friendly" */
+  defaultEmotion?: string;
 }
 
 async function configure(opts: LoadOptions) {
@@ -55,6 +57,10 @@ export function inspectRobotModel(gltf: GLTF): RobotModelParts {
       for (const mat of mats) materials.set(mat.name, mat);
     }
   });
+  let defaultEmotion: string | undefined;
+  gltf.scene.traverse((o) => {
+    if (typeof o.userData?.default_emotion === "string") defaultEmotion = o.userData.default_emotion;
+  });
   const missingBones = REQUIRED_BONES.filter((b) => !bones.has(b));
   const missingMorphs: string[] = [];
   for (const [mesh, names] of Object.entries(REQUIRED_MORPHS)) {
@@ -75,5 +81,5 @@ export function inspectRobotModel(gltf: GLTF): RobotModelParts {
     s.castShadow = true;
     s.receiveShadow = true;
   }
-  return { scene: gltf.scene, skinned, meshes, materials };
+  return { scene: gltf.scene, skinned, meshes, materials, defaultEmotion };
 }
