@@ -4,7 +4,7 @@
 
 | Item | Value | How measured |
 |---|---|---|
-| Triangles | 29,272 per pass (renderer shows ≈ 59 k with the shadow pass) | geometry index counts; `renderer.info` |
+| Triangles | 29,272 per pass for the v1 styles, **74,232 for Concierge** (the renderer counter doubles with the shadow pass) | geometry index counts; `renderer.info` |
 | Draw calls | 11 skinned meshes per pass | `renderer.info.render.calls` = 27 in the full Studio scene (main + shadow + floor + grid + ring) |
 | Bones / morph targets | 40 / 43 | `tests/model.test.ts` |
 | File size | 194 KB (Meshopt) vs 981 KB raw | `npm run model:build` |
@@ -18,6 +18,7 @@ The 60 FPS target is therefore limited only by the GPU: the CPU side uses ~1–3
 | | low | medium | high |
 |---|---|---|---|
 | Pixel ratio cap | 1 | 1.5 | 2 |
+| Selective bloom (glow) | off | off | on (two extra half-float passes; falls back automatically if unsupported) |
 | Shadows | off | 1024 map | 2048 map |
 | Env-map intensity / tone mapping | 0.7 / linear | 0.9 / ACES | 1.0 / ACES |
 | Grid | hidden | shown | shown |

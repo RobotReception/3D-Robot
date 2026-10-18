@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import type { RobotAvatar } from "../engine/RobotAvatar";
 
 export type QualityLevel = "low" | "medium" | "high";
@@ -22,10 +27,10 @@ export function webglSupported(): boolean {
   }
 }
 
-const QUALITY: Record<QualityLevel, { pixelRatio: number; shadows: boolean; shadowMap: number; envIntensity: number; toneMapping: THREE.ToneMapping }> = {
-  low: { pixelRatio: 1, shadows: false, shadowMap: 512, envIntensity: 0.7, toneMapping: THREE.LinearToneMapping },
-  medium: { pixelRatio: 1.5, shadows: true, shadowMap: 1024, envIntensity: 0.9, toneMapping: THREE.ACESFilmicToneMapping },
-  high: { pixelRatio: 2, shadows: true, shadowMap: 2048, envIntensity: 1, toneMapping: THREE.ACESFilmicToneMapping },
+const QUALITY: Record<QualityLevel, { pixelRatio: number; shadows: boolean; shadowMap: number; envIntensity: number; toneMapping: THREE.ToneMapping; bloom: boolean }> = {
+  low: { pixelRatio: 1, shadows: false, shadowMap: 512, envIntensity: 0.7, toneMapping: THREE.LinearToneMapping, bloom: false },
+  medium: { pixelRatio: 1.5, shadows: true, shadowMap: 1024, envIntensity: 0.9, toneMapping: THREE.ACESFilmicToneMapping, bloom: false },
+  high: { pixelRatio: 2, shadows: true, shadowMap: 2048, envIntensity: 1, toneMapping: THREE.ACESFilmicToneMapping, bloom: true },
 };
 const BACKGROUNDS: Record<BackgroundPreset, { color: string | null; floor: string }> = {
   studio: { color: "#10131a", floor: "#1b2030" },
@@ -71,6 +76,14 @@ export class RobotViewer {
   private ring: THREE.Mesh;
   private grid: THREE.GridHelper;
   private envTex: THREE.Texture;
+  private bloomComposer: EffectComposer | null = null;
+  private finalComposer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+  private darkMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  private stash = new Map<THREE.Object3D, THREE.Material | THREE.Material[]>();
+  private bloomLayer = new THREE.Layers();
+  /** glow (bloom) on emissive parts: eyes, mouth, ring joints. On by default in "high". */
+  bloom = false;
   private pmrem: THREE.PMREMGenerator;
   private raf = 0;
   private last = 0;
@@ -90,6 +103,7 @@ export class RobotViewer {
   followTarget: (() => THREE.Vector3) | null = null;
 
   constructor(readonly container: HTMLElement, o: ViewerOptions = {}) {
+    this.bloomLayer.set(1);
     if (!webglSupported()) throw new WebGLUnavailableError();
     this.canvas = o.canvas ?? document.createElement("canvas");
     this.canvas.style.cssText = "display:block;width:100%;height:100%;touch-action:none;outline:none";
@@ -170,9 +184,13 @@ export class RobotViewer {
     this.avatars.add(avatar);
     this.scene.add(avatar.root);
     avatar.root.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh) {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) {
         o.castShadow = true;
         o.receiveShadow = true;
+        const mats = Array.isArray(m.material) ? m.material : [m.material];
+        // emissive parts (eyes, mouth, brows, ring joints) take part in the selective bloom
+        if (mats.some((x) => x.name === "Mat_Glow" || x.name === "Mat_Face")) o.layers.enable(1);
       }
     });
   }
@@ -196,6 +214,7 @@ export class RobotViewer {
     this.renderer.toneMappingExposure = this.light.exposure;
     this.scene.environmentIntensity = c.envIntensity;
     this.grid.visible = q !== "low" && this.light.grid;
+    this.setBloom(c.bloom);
     this.floor.receiveShadow = c.shadows;
     // materials need recompiling when shadows toggle
     this.scene.traverse((o) => {
@@ -204,6 +223,83 @@ export class RobotViewer {
     });
     this.resize();
   }
+  /**
+   * Selective bloom: only meshes on the bloom layer (emissive eyes/mouth/ring joints) glow. Technique from the three.js
+   * "selective bloom" example: render everything else black into a bloom buffer, blur it, add it to the normal frame.
+   */
+  setBloom(on: boolean) {
+    this.bloom = on;
+    if (on && !this.bloomComposer) {
+      try {
+        this.createBloom();
+      } catch (e) {
+        console.warn("bloom unavailable, rendering without glow", e);
+        this.bloom = false;
+        this.bloomComposer = this.finalComposer = null;
+      }
+    }
+    if (!on && this.bloomComposer) {
+      this.bloomComposer.dispose();
+      this.finalComposer?.dispose();
+      this.bloomPass?.dispose();
+      this.bloomComposer = this.finalComposer = null;
+      this.bloomPass = null;
+    }
+  }
+  private createBloom() {
+    {
+      const size = this.renderer.getSize(new THREE.Vector2());
+      const mk = () => new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+      this.bloomComposer = new EffectComposer(this.renderer, mk());
+      this.bloomComposer.renderToScreen = false;
+      this.bloomComposer.addPass(new RenderPass(this.scene, this.camera));
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.38, 0.3, 0);
+      this.bloomComposer.addPass(this.bloomPass);
+      const mix = new ShaderPass(
+        new THREE.ShaderMaterial({
+          uniforms: { baseTexture: { value: null }, bloomTexture: { value: this.bloomComposer.renderTarget2.texture } },
+          vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+          fragmentShader: "uniform sampler2D baseTexture; uniform sampler2D bloomTexture; varying vec2 vUv; void main(){ gl_FragColor = texture2D(baseTexture, vUv) + texture2D(bloomTexture, vUv); }",
+        }),
+        "baseTexture",
+      );
+      mix.needsSwap = true;
+      this.finalComposer = new EffectComposer(this.renderer, mk());
+      this.finalComposer.addPass(new RenderPass(this.scene, this.camera));
+      this.finalComposer.addPass(mix);
+      this.finalComposer.addPass(new OutputPass());
+      for (const c of [this.bloomComposer, this.finalComposer]) {
+        c.setPixelRatio(this.renderer.getPixelRatio());
+        c.setSize(size.x, size.y);
+      }
+    }
+  }
+  private draw() {
+    if (!(this.bloom && this.bloomComposer && this.finalComposer)) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+    // 1. bloom buffer: non-emissive geometry black, no background
+    const bg = this.scene.background;
+    const fog = this.scene.fog;
+    this.scene.background = null;
+    this.scene.fog = null;
+    this.scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if ((m.isMesh || (o as THREE.Line).isLine) && !this.bloomLayer.test(o.layers)) {
+        this.stash.set(o, m.material);
+        m.material = this.darkMat;
+      }
+    });
+    this.bloomComposer.render();
+    for (const [o, mat] of this.stash) (o as THREE.Mesh).material = mat;
+    this.stash.clear();
+    this.scene.background = bg;
+    this.scene.fog = fog;
+    // 2. final frame = normal render + bloom
+    this.finalComposer.render();
+  }
+
   setBackground(b: BackgroundPreset) {
     this.background = b;
     const p = BACKGROUNDS[b];
@@ -236,11 +332,18 @@ export class RobotViewer {
   setCameraPreset(p: CameraPreset, animate = true, robot?: RobotAvatar) {
     const base = robot ? robot.root.position.clone() : new THREE.Vector3();
     const yaw = robot ? robot.root.rotation.y : 0;
-    const dir = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    // presets were tuned for the 1.57 m premium robot (head pivot 1.12 m, eye spacing 0.155 m); adapt to the loaded model
+    const head = robot ? robot.joints.restWorldPos("head").y : 1.12;
+    const eyeSpacing = robot ? robot.joints.restWorldPos("eye_L").x * 2 : 0.155;
+    const k = (head + 0.28) / 1.4; // overall size
+    const kf = eyeSpacing / 0.155; // head size
+    const eyeY = robot ? robot.joints.restWorldPos("eye_L").y : 1.3;
+    const yaw3 = new THREE.Vector3(0, 1, 0);
+    const dir = (x: number, y: number, z: number, s = k) => new THREE.Vector3(x * s, y * s, z * s).applyAxisAngle(yaw3, yaw);
     const presets: Record<CameraPreset, { pos: THREE.Vector3; tgt: THREE.Vector3 }> = {
       full: { pos: dir(0, 1.05, 3.6), tgt: dir(0, 0.82, 0) },
       upper: { pos: dir(0, 1.25, 1.8), tgt: dir(0, 1.0, 0) },
-      face: { pos: dir(0, 1.34, 0.95), tgt: dir(0, 1.3, 0) },
+      face: { pos: dir(0, eyeY + 0.04, 0.95, Math.sqrt(kf)).setY(eyeY + 0.04), tgt: new THREE.Vector3(0, eyeY, 0).applyAxisAngle(yaw3, yaw) },
       side: { pos: dir(3.4, 1.0, 0.4), tgt: dir(0, 0.82, 0) },
       back: { pos: dir(0, 1.05, -3.6), tgt: dir(0, 0.82, 0) },
     };
@@ -260,6 +363,10 @@ export class RobotViewer {
     const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
     this.renderer.setSize(w, h, false);
+    for (const c of [this.bloomComposer, this.finalComposer]) {
+      c?.setPixelRatio(this.renderer.getPixelRatio());
+      c?.setSize(w, h);
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -309,7 +416,7 @@ export class RobotViewer {
       this.key.target.position.copy(first.root.position);
       this.key.target.updateMatrixWorld();
     }
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
     const ms = performance.now() - t0;
     this.frames++;
     this.fpsAcc += dt;
@@ -331,7 +438,7 @@ export class RobotViewer {
   }
 
   screenshot(type = "image/png"): string {
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
     return this.canvas.toDataURL(type);
   }
 
@@ -343,6 +450,7 @@ export class RobotViewer {
     this.controls.dispose();
     for (const a of this.avatars) a.dispose();
     this.avatars.clear();
+    this.setBloom(false);
     this.envTex.dispose();
     this.pmrem.dispose();
     this.floor.geometry.dispose();

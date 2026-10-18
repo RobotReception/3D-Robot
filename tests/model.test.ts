@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { loadModelNode, type RobotStyle } from "./helpers/loadRobot";
 import { REQUIRED_BONES, REQUIRED_MORPHS, JointSpace } from "../src/engine/rig";
 
-const styles: RobotStyle[] = ["friendly", "futuristic", "premium"];
+const styles: RobotStyle[] = ["friendly", "futuristic", "premium", "concierge"];
 
 describe.each(styles)("robot model (%s)", (style) => {
   it("is a skinned, rigged model with the documented bones and morph targets", async () => {
@@ -24,7 +24,7 @@ describe.each(styles)("robot model (%s)", (style) => {
     let tris = 0;
     for (const m of parts.meshes.values()) tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
     expect(parts.meshes.size).toBeLessThanOrEqual(12); // draw calls per pass
-    expect(tris).toBeLessThan(70000);
+    expect(tris).toBeLessThan(style === "concierge" ? 130000 : 70000);
     for (const mat of parts.materials.values()) expect((mat as THREE.MeshStandardMaterial).isMeshStandardMaterial).toBe(true);
     expect(parts.materials.has("Mat_Glow")).toBe(true);
   });

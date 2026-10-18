@@ -426,10 +426,10 @@ await check("quality levels change the real render settings (pixel ratio, shadow
   return q;
 });
 
-await check("style switching loads all 3 designs and does not leak GPU memory", async () => {
+await check("style switching loads all 4 designs and does not leak GPU memory", async () => {
   const mem = [];
   for (let round = 0; round < 2; round++) {
-    for (const s of ["friendly", "futuristic", "premium"]) {
+    for (const s of ["friendly", "futuristic", "premium", "concierge"]) {
       await page.selectOption('[data-testid="style-select"]', s);
       await page.waitForFunction((st) => window.studio.style === st && window.robot, s, { timeout: 20000 });
       await page.waitForTimeout(500);
@@ -441,7 +441,7 @@ await check("style switching loads all 3 designs and does not leak GPU memory", 
       }
     }
   }
-  ok(mem[5].g <= mem[2].g + 2 && mem[5].t <= mem[2].t + 1, "geometry/texture count grew: " + JSON.stringify(mem));
+  ok(mem[7].g <= mem[3].g + 2 && mem[7].t <= mem[3].t + 1, "geometry/texture count grew: " + JSON.stringify(mem));
   return { geometries: mem.map((m) => m.g) };
 });
 

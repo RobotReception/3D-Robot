@@ -154,7 +154,7 @@ describe("locomotion (IK-planted walking)", () => {
   });
 
   it("works for all three styles (different leg lengths)", async () => {
-    for (const style of ["friendly", "futuristic"] as const) {
+    for (const style of ["friendly", "futuristic", "concierge"] as const) {
       const r = await makeRobot(style);
       void r.walkTo({ x: 0, z: 2 });
       run(r, 6);
