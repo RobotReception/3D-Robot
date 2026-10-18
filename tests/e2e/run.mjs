@@ -55,6 +55,8 @@ async function open(opts = {}) {
   await page.goto(URL);
   await page.waitForSelector('[data-testid="viewport"] canvas', { timeout: 60000 });
   await page.waitForFunction(() => window.robot && window.studio, null, { timeout: 60000 });
+  // the software rasteriser is slow: run the functional checks at "medium" (no bloom); bloom is verified separately
+  await page.evaluate(() => window.studio.setQuality("medium"));
   return { ctx, page };
 }
 const status = (page) => page.evaluate(() => window.robot.getStatus());
@@ -423,6 +425,16 @@ await check("quality levels change the real render settings (pixel ratio, shadow
     q[level] = await page.evaluate(() => ({ pr: window.viewer.renderer.getPixelRatio(), shadows: window.viewer.renderer.shadowMap.enabled }));
   }
   ok(q.low.shadows === false && q.high.shadows === true && q.low.pr <= q.high.pr, JSON.stringify(q));
+  // selective bloom: on only at "high"; the stats then cover several passes
+  const b = await page.evaluate(() => ({ bloom: window.viewer.bloom, layers: [...window.robot.parts.meshes.values()].filter((m) => m.layers.isEnabled(1)).map((m) => m.name) }));
+  ok(b.bloom === true && b.layers.includes("Glow") && b.layers.includes("Mouth") && !b.layers.includes("Body_Shell"), "bloom not selective: " + JSON.stringify(b));
+  await page.waitForTimeout(1500);
+  const calls = await page.evaluate(() => window.viewer.stats.calls);
+  ok(calls > 20, "stats should count all passes: " + calls);
+  await page.selectOption('[data-testid="quality-select"]', "medium");
+  const off = await page.evaluate(() => window.viewer.bloom);
+  ok(off === false, "bloom should be off at medium");
+  q.bloom = b;
   return q;
 });
 

@@ -113,6 +113,7 @@ export class RobotViewer {
       preserveDrawingBuffer: o.preserveDrawingBuffer ?? false,
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.info.autoReset = false; // multi-pass frames (bloom): reset once per frame so stats cover all passes
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
     // PBR environment (procedural room, no external HDR needed)
@@ -416,6 +417,7 @@ export class RobotViewer {
       this.key.target.position.copy(first.root.position);
       this.key.target.updateMatrixWorld();
     }
+    this.renderer.info.reset();
     this.draw();
     const ms = performance.now() - t0;
     this.frames++;
