@@ -2,6 +2,7 @@ import type { Channel } from "./clips";
 import { EMOTIONS, EYE_EXPRESSIONS, type EmotionName, type EyeExpression } from "./FaceController";
 import type { RobotAvatar, Vec3 } from "./RobotAvatar";
 import { ASSISTANT_STATES, type AssistantState } from "./stateMachine";
+import { MOTION_SCHEMA } from "./motionJson";
 import type { FingerCurl } from "./rig";
 import type { VisemeEvent } from "./lipsync/visemes";
 
@@ -37,12 +38,16 @@ export type RobotCommand =
   | { cmd: "wait"; seconds: number }
   | { cmd: "sequence"; steps: RobotCommand[] }
   | { cmd: "parallel"; steps: RobotCommand[] }
+  | { cmd: "registerMotion"; motion: unknown; overwrite?: boolean; play?: boolean }
+  | { cmd: "listMotions" }
+  | { cmd: "getMotion"; name: string }
+  | { cmd: "getMotionSchema" }
   | { cmd: "getStatus" };
 
 export const COMMAND_NAMES = [
   "playAnimation", "stopAnimation", "setEmotion", "setEyeExpression", "lookAt", "moveHead", "moveArm", "moveTorso", "setEyeDirection", "moveJoint", "releaseJoint",
   "setHand", "pointAt", "setMouthOpen", "blink", "walkTo", "turn", "speak", "setState", "setSpeed", "setGlow", "stop", "resetPose",
-  "wait", "sequence", "parallel", "getStatus",
+  "wait", "sequence", "parallel", "registerMotion", "listMotions", "getMotion", "getMotionSchema", "getStatus",
 ] as const;
 
 export interface CommandResult {
@@ -237,6 +242,22 @@ async function run(robot: RobotAvatar, c: Record<string, unknown>): Promise<unkn
       if (!Array.isArray(c.steps)) throw new CommandError('"steps" must be an array');
       return Promise.all(c.steps.map((s) => executeCommand(robot, s)));
     }
+    case "registerMotion": {
+      const res = robot.registerMotion(c.motion, { overwrite: c.overwrite === true });
+      if (!res.ok) throw new CommandError(`invalid motion: ${res.errors.map((e) => `${e.path}: ${e.message}`).join("; ")}`);
+      let played: unknown;
+      if (c.play) played = robot.playAnimation(res.def!.name);
+      return { name: res.def!.name, warnings: res.warnings, played: played ? (played as { accepted: string[] }).accepted : undefined };
+    }
+    case "listMotions":
+      return { custom: robot.listMotions(), all: robot.listAnimations() };
+    case "getMotion": {
+      const m = robot.getMotion(str(c, "name")!);
+      if (!m) throw new CommandError(`unknown motion "${c.name}"`);
+      return m;
+    }
+    case "getMotionSchema":
+      return MOTION_SCHEMA;
     case "getStatus":
       return robot.getStatus();
     default:

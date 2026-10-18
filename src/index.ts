@@ -31,3 +31,5 @@ export type { ArmAngles, HeadAngles, EulerDeg, Side } from "./engine/rig";
 export { loadRobotGLTF, parseRobotGLTF, inspectRobotModel } from "./engine/loader";
 export { RobotViewer, webglSupported, WebGLUnavailableError } from "./viewer/RobotViewer";
 export type { QualityLevel, CameraPreset, BackgroundPreset, ViewerStats } from "./viewer/RobotViewer";
+export { compileMotion, exportMotion, MOTION_SCHEMA } from "./engine/motionJson";
+export type { MotionJson, MotionKey, MotionEvent, CompileResult } from "./engine/motionJson";

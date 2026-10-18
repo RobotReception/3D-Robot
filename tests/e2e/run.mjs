@@ -492,6 +492,41 @@ await check("WebSocket bridge: a server drives the robot with JSON and receives 
   return { replies: received.filter((m) => m.id).length, events: received.filter((m) => m.event).length };
 });
 
+await check("Remote HTTP API: POST a JSON motion + commands from outside, the browser robot performs them", async () => {
+  const srv = spawn("node", ["tools/remote_api_server.mjs"], { cwd: root, env: { ...process.env, PORT: "8788", API_KEY: "k" }, stdio: "ignore" });
+  const H = { authorization: "Bearer k", "content-type": "application/json" };
+  const api = (p, init = {}) => fetch(`http://localhost:8788${p}`, { ...init, headers: { ...H, ...(init.headers || {}) } });
+  try {
+    for (let i = 0; i < 40; i++) { try { if ((await fetch("http://localhost:8788/v1/health", { headers: H })).ok) break; } catch { /* starting */ } await new Promise((r) => setTimeout(r, 150)); }
+    ok((await fetch("http://localhost:8788/v1/health")).status === 401, "API key not enforced");
+    await page.click('[data-testid="tab-Developer"]');
+    await page.locator('input[aria-label="WebSocket URL"]').fill("ws://localhost:8788");
+    await page.click('button:has-text("Connect")');
+    const t0 = Date.now();
+    while ((await (await api("/v1/health")).json()).robots < 1 && Date.now() - t0 < 10000) await new Promise((r) => setTimeout(r, 100));
+    const motion = { name: "remoteNod", duration: 1.6, keys: [{ t: 0, head: { pitch: 0 }, armL: { shoulder: 0, elbow: 0 } }, { t: 0.5, head: { pitch: -20 }, armL: { shoulder: 80, elbow: 30 } }, { t: 1.6, head: { pitch: 0 }, armL: { shoulder: 0, elbow: 0 } }] };
+    const reg = await api("/v1/motions?play=1", { method: "POST", body: JSON.stringify(motion) });
+    const regBody = await reg.json();
+    ok(reg.status === 201 && regBody.ok, "register failed " + JSON.stringify(regBody));
+    await waitFor(page, () => window.robot.animation.isPlaying("remoteNod"), null, 20000);
+    const bad = await api("/v1/motions", { method: "POST", body: JSON.stringify({ name: "x" }) });
+    const badBody = await bad.json();
+    ok(bad.status === 400 && /duration/.test(badBody.error), "invalid motion should return 400 with details: " + JSON.stringify(badBody));
+    const cmd = await (await api("/v1/command", { method: "POST", body: JSON.stringify({ cmd: "setEmotion", emotion: "curious" }) })).json();
+    ok(cmd.ok, "command failed " + JSON.stringify(cmd));
+    const st = await (await api("/v1/status")).json();
+    ok(st.result.emotion.name === "curious", "status mismatch " + JSON.stringify(st));
+    const list = await (await api("/v1/motions")).json();
+    ok(list.result.custom.includes("remoteNod"), "motion not listed");
+    const schema = await (await api("/v1/schema/motion")).json();
+    ok(schema.result.title === "RobotMotion", "schema missing");
+    await page.click('button:has-text("Disconnect")');
+    return { registered: regBody.result.name, status: st.result.emotion.name };
+  } finally {
+    srv.kill();
+  }
+});
+
 await check("no uncaught errors or console errors during the whole session", async () => {
   ok(consoleErrors.length === 0, consoleErrors.slice(0, 5).join(" | "));
 });

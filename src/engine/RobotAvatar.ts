@@ -15,6 +15,7 @@ import { estimateSpeechDuration, textToVisemeEvents } from "./lipsync/phonemizer
 import type { VisemeEvent } from "./lipsync/visemes";
 import { inspectRobotModel, loadRobotGLTF, type LoadOptions, type RobotModelParts } from "./loader";
 import { LocomotionController, type WalkOptions } from "./LocomotionController";
+import { compileMotion, exportMotion, type CompileResult, type MotionEvent, type MotionJson } from "./motionJson";
 import {
   HAND_PRESETS, JOINT_DEFS, JointSpace, armPose, clampEuler, eulerToQuat, fingerPose, headPose, parseBone, rawLimits,
   type ArmAngles, type EulerDeg, type FingerCurl, type HeadAngles, type Side,
@@ -296,6 +297,41 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     }
   }
 
+  // ================================================================ data-driven motions
+  private motionEvents = new Map<string, MotionEvent[]>();
+  private motionSources = new Map<string, unknown>();
+
+  /**
+   * Validate + register a motion given as JSON (see docs/MOTION_AUTHORING.md). Returns errors/warnings; on success the
+   * motion is immediately playable with `playAnimation(name)`. Never throws.
+   */
+  registerMotion(json: unknown, o: { overwrite?: boolean } = {}): CompileResult {
+    const builtin = new Set(BUILTIN_CLIPS.map((c) => c.name));
+    const name = typeof json === "object" && json !== null ? (json as { name?: unknown }).name : undefined;
+    if (typeof name === "string" && builtin.has(name)) {
+      return { ok: false, events: [], warnings: [], errors: [{ path: "name", message: `"${name}" is a built-in animation and cannot be replaced` }] };
+    }
+    const res = compileMotion(json, { existingNames: this.animation.list().map((d) => d.name), overwrite: o.overwrite });
+    if (res.ok && res.def) {
+      if (this.animation.isPlaying(res.def.name)) this.animation.stop(res.def.name, 0.05);
+      this.animation.register(res.def);
+      this.motionEvents.set(res.def.name, res.events);
+      this.motionSources.set(res.def.name, json);
+    }
+    return res;
+  }
+  /** Names of motions registered from JSON. */
+  listMotions(): string[] {
+    return [...this.motionSources.keys()];
+  }
+  /** JSON of a registered motion, or a built-in clip sampled into the same format (for inspection / as an AI example). */
+  getMotion(name: string): MotionJson | null {
+    const src = this.motionSources.get(name);
+    if (src) return src as MotionJson;
+    const def = this.animation.def(name);
+    return def ? exportMotion(def) : null;
+  }
+
   // ================================================================ animations
   /** Play a clip ("greeting", "happy", ...) or locomotion ("walking", "turning"). */
   playAnimation(name: string, opts: PlayOptions & { emotion?: boolean } = {}): AnimationHandle {
@@ -315,6 +351,16 @@ export class RobotAvatar extends Emitter<RobotEvents> {
       this.face.setEmotion(ANIMATION_EMOTION[name] as EmotionName);
       const def = this.animation.def(name)!;
       if (!def.loop) this.after((def.duration * 0.85) / Math.max(0.1, this.animation.speed), () => this.maybeRestoreEmotion(name));
+    }
+    const evs = res.accepted.length ? this.motionEvents.get(name) : undefined;
+    if (evs) {
+      for (const e of evs) {
+        this.after(e.t / Math.max(0.1, (opts.speed ?? 1) * this.animation.speed), () => {
+          if (e.emotion) this.setEmotion(e.emotion as EmotionName, e.intensity ?? 1);
+          if (e.eyeExpression !== undefined) this.setEyeExpression(e.eyeExpression as EyeExpression | null);
+          if (e.blink) this.blink();
+        });
+      }
     }
     const finished = new Promise<void>((resolve) => {
       if (!res.accepted.length) return resolve();

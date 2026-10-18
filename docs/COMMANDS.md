@@ -22,6 +22,8 @@ Implemented in `src/engine/commands.ts`; tested in `tests/api.test.ts` and the b
 { "cmd": "setState", "state": "thinking" }
 { "cmd": "setSpeed", "value": 1.5 }   { "cmd": "setGlow", "color": "#59d0ff", "boost": 0.5 }
 { "cmd": "stop" }   { "cmd": "resetPose", "position": true }   { "cmd": "getStatus" }
+{ "cmd": "registerMotion", "motion": { … see MOTION_AUTHORING.md … }, "overwrite": false, "play": true }
+{ "cmd": "listMotions" }   { "cmd": "getMotion", "name": "greeting" }   { "cmd": "getMotionSchema" }
 { "cmd": "wait", "seconds": 0.5 }
 { "cmd": "sequence", "steps": [ ... ] }    // sequential; walkTo/turn/speak/playAnimation wait for completion
 { "cmd": "parallel", "steps": [ ... ] }
@@ -43,6 +45,7 @@ attachBridge(robot, { send: (s) => port.postMessage(s), onMessage: (cb) => port.
 - Robot → server: one reply per command, plus event frames `{"event":"state","data":{"from":"idle","to":"listening"}}` for `animation:*`, `emotion`, `state`, `speech:*`, `walk:*`, `error`.
 - **Security:** the bridge executes whatever the server sends; connect only to backends you trust and use `wss://`. The engine does not authenticate peers.
 - Demo server: `npm run ws:example` (scripted assistant turn), then Studio → Developer → Connect.
+- HTTP façade for backends/AI agents (`npm run api:server`): [REMOTE_API.md](REMOTE_API.md).
 
 ## LLM tool-calling
 
