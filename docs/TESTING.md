@@ -7,7 +7,7 @@ npm run test:e2e       # 27 browser tests: builds, serves dist/, drives the Stud
 npm run typecheck && npm run build
 ```
 
-Results of the last run: **89/89 unit-integration tests** and **26/27 browser tests** passed. Screenshots written by the E2E run are in `docs/screenshots/`.
+Results of the last run: **89/89 unit-integration tests** and **27/27 browser tests** passed. Screenshots written by the E2E run are in `docs/screenshots/`.
 
 ## What the unit/integration tests prove (Node, real GLB, no mocks)
 
