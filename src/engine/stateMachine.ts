@@ -78,7 +78,7 @@ export class AssistantStateMachine {
       case "idle":
         r.animation.stop("listening");
         r.animation.stop("thinking");
-        if (!r.speaking) r.setEmotion("neutral");
+        if (!r.speaking) r.setEmotion(r.defaultEmotion);
         this.lookAtUser();
         break;
       case "listening":

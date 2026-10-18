@@ -3,7 +3,7 @@ import { RobotAvatar } from "../engine/RobotAvatar";
 import { RobotViewer, type BackgroundPreset, type CameraPreset, type QualityLevel } from "../viewer/RobotViewer";
 import { JOINT_DEFS, REQUIRED_BONES } from "../engine/rig";
 
-export type Style = "friendly" | "futuristic" | "premium" | "concierge";
+export type Style = "friendly" | "futuristic" | "premium" | "concierge" | "mascot";
 export type GazeMode = "free" | "cursor" | "camera";
 
 export interface LogEntry {

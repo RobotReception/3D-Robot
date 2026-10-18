@@ -57,6 +57,15 @@ STYLES = {
         uniform=(0.035, 0.06, 0.15), glow=(0.0, 0.32, 1.0), metal=0.0, rough=0.2, coat=1.0, eye=(0.058, 0.066), eye_p=2.1,
         mouth_w=0.04,
     ),
+    # Chibi mascot: huge head, small egg body, stubby limbs, glowing rings (cute assistant for kiosks/apps).
+    "mascot": dict(
+        kind="mascot", head_r=0.25, head_sq=(1.0, 0.95, 0.93), e_head=0.92, torso=(0.13, 0.11, 0.2),
+        e_box=0.9, thigh=0.08, shin=0.08, limb_r=0.045, upper=0.09, fore=0.085, chest_h=0.17, hip_x=0.075, foot=0.8,
+        ankle=0.055, hand_scale=0.6, default_emotion="content",
+        shell=(0.97, 0.97, 1.0), shell2=(0.72, 0.74, 0.86), dark=(0.01, 0.011, 0.016), accent=(0.78, 0.8, 0.9),
+        glow=(0.30, 0.34, 1.0), metal=0.0, rough=0.16, coat=1.0, eye=(0.07, 0.074), eye_p=2.0, mouth_w=0.03,
+        hide_idle_face=True,
+    ),
 }
 
 FINGERS = ["thumb", "index", "middle", "ring"]
@@ -68,7 +77,7 @@ MOUTH_NU, MOUTH_NV = 41, 7
 def layout(S):
     """Joint positions (Blender space)."""
     L = {}
-    ankle = 0.085
+    ankle = S.get("ankle", 0.085)
     knee = ankle + S["shin"]
     hip = knee + S["thigh"]
     pel = hip + 0.035
@@ -109,18 +118,20 @@ def build_bones(S, L):
         B.append((f"clavicle_{side}", "chest", V(sx * (S["torso"][0] * 0.45), 0, shz), V(shx, 0, shz)))
         B.append((f"upperarm_{side}", f"clavicle_{side}", V(shx, 0, shz), V(shx, 0, L["elbow"])))
         B.append((f"forearm_{side}", f"upperarm_{side}", V(shx, 0, L["elbow"]), V(shx, 0, L["wrist"])))
-        B.append((f"hand_{side}", f"forearm_{side}", V(shx, 0, L["wrist"]), V(shx, 0, L["wrist"] - 0.07)))
-        base_z = L["wrist"] - 0.092
+        hs = S.get("hand_scale", 1.0)
+        B.append((f"hand_{side}", f"forearm_{side}", V(shx, 0, L["wrist"]), V(shx, 0, L["wrist"] - 0.07 * hs)))
+        base_z = L["wrist"] - 0.092 * hs
         for fi, fname in enumerate(FINGERS):
             if fname == "thumb":
-                fx, fy, dirv = shx - sx * 0.026, -0.062, V(-sx * 0.004, -0.012, -1).normalized()
-                z0 = L["wrist"] - 0.045
+                fx, fy, dirv = shx - sx * 0.026 * hs, -0.062 * hs, V(-sx * 0.004, -0.012, -1).normalized()
+                z0 = L["wrist"] - 0.045 * hs
             else:
                 fx = shx
-                fy = {"index": -0.034, "middle": 0.0, "ring": 0.034}[fname]
+                fy = {"index": -0.034 * hs, "middle": 0.0, "ring": 0.034 * hs}[fname]
                 dirv = V(0, 0, -1)
                 z0 = base_z
-            l1, l2 = (0.04, 0.034) if fname != "thumb" else (0.034, 0.03)
+            l1, l2 = ((0.04, 0.034) if fname != "thumb" else (0.034, 0.03))
+            l1, l2 = l1 * hs, l2 * hs
             p0 = V(fx, fy, z0)
             p1 = p0 + dirv * l1
             p2 = p1 + dirv * l2
@@ -131,8 +142,8 @@ def build_bones(S, L):
         B.append((f"thigh_{side}", "pelvis", V(hx, 0, L["hip"]), V(hx, 0, L["knee"])))
         B.append((f"shin_{side}", f"thigh_{side}", V(hx, 0, L["knee"]), V(hx, 0, L["ankle"])))
         fl = S.get("foot", 1.0)
-        B.append((f"foot_{side}", f"shin_{side}", V(hx, 0, L["ankle"]), V(hx, -0.1 * fl, 0.045)))
-        B.append((f"toe_{side}", f"foot_{side}", V(hx, -0.1 * fl, 0.045), V(hx, -0.17 * fl, 0.03)))
+        B.append((f"foot_{side}", f"shin_{side}", V(hx, 0, L["ankle"]), V(hx, -0.1 * fl, 0.045 * L["ankle"] / 0.085)))
+        B.append((f"toe_{side}", f"foot_{side}", V(hx, -0.1 * fl, 0.045 * L["ankle"] / 0.085), V(hx, -0.17 * fl, 0.03 * L["ankle"] / 0.085)))
     return B
 
 
@@ -510,6 +521,66 @@ def humanoid_parts(P, S, L, bones, bone_index):
     return face_y
 
 
+def mascot_parts(P, S, L, bones, bone_index):
+    """Chibi mascot: plush-like white shell, huge head, glowing ring accents. Returns the face-plane y."""
+    hr, sq = S["head_r"], S["head_sq"]
+    hc = L["head_c"]
+    hrx, hry, hrz = hr * sq[0], hr * sq[1], hr * sq[2]
+    tx, ty, _ = S["torso"]
+    sh, dk, gl, ac, vi = P["shell"], P["dark"], P["glow"], P["accent"], P["visor"]
+
+    def ring(center, R, axis, bone, r=0.007, disc=True):
+        gl.torus(center, R, r, bone, axis=axis, nu=48, nv=8)
+        if disc:
+            dk.ellipsoid(center, (R * 0.9, R * 0.9, 0.004), bone, e1=0.5, axis=axis, nu=32, nv=6)
+
+    # head
+    sh.ellipsoid((0, 0, hc), (hrx, hry, hrz), "head", e1=S["e_head"], e2=S["e_head"], nu=72, nv=40)
+    vis_c = (0, -hry * 0.78, hc + hrz * 0.03)
+    vis_depth = hry * 0.24
+    vi.ellipsoid(vis_c, (hrx * 0.86, hrz * 0.74, vis_depth), "head", e1=0.4, e2=0.85, axis=(0, -1, 0), nu=72, nv=32)
+    face_y = vis_c[1] - vis_depth - 0.0035
+    for sx in (1, -1):  # big ear caps with glowing rings
+        x0 = sx * hrx * 0.97
+        z0 = hc - 0.012
+        sh.ellipsoid((x0, 0.004, z0), (hrz * 0.44, hrz * 0.44, 0.032), "head", e1=0.5, axis=(sx, 0, 0), nu=48, nv=16)
+        ac.torus((x0 + sx * 0.03, 0.004, z0), hrz * 0.36, 0.006, "head", axis=(sx, 0, 0), nu=48, nv=8)
+        dk.ellipsoid((x0 + sx * 0.028, 0.004, z0), (hrz * 0.31, hrz * 0.31, 0.007), "head", e1=0.5, axis=(sx, 0, 0), nu=36, nv=6)
+        ring((x0 + sx * 0.034, 0.004, z0), hrz * 0.255, (sx, 0, 0), "head", r=0.009, disc=False)
+    # neck: dark collar + glowing ring
+    dk.ellipsoid((0, 0, L["neck"] + 0.02), (0.07, 0.066, 0.03), "neck", e1=0.5, nu=32, nv=10)
+    gl.torus((0, 0, L["neck"] + 0.034), 0.078, 0.0085, "neck", nu=56, nv=8)
+    # body: pear-shaped egg (wider at the belly), split over chest/pelvis with overlapping blobs
+    mid = (L["pel"] + L["neck"]) / 2
+    sh.ellipsoid((0, 0, mid + 0.02), (tx, ty, 0.2), "chest", e1=0.9, e2=0.92, taper=(1.12, 0.8), nu=56, nv=32)
+    sh.ellipsoid((0, 0, L["pel"] + 0.01), (tx * 1.02, ty * 1.0, 0.085), "pelvis", e1=0.9, e2=0.92, nu=40, nv=18)
+    gl.ellipsoid((0, -ty * 0.97, L["pel"] - 0.005), (0.036, 0.007, 0.0045), "pelvis", e1=0.5, axis=(0, -1, 0), nu=20, nv=8)  # belly dash
+    for sx in (1, -1):
+        shx, shz = L["sh_x"] * sx, L["sh_z"]
+        side = "L" if sx == 1 else "R"
+        elb, wr = L["elbow"], L["wrist"]
+        sh.capsule((sx * tx * 0.4, 0, shz - 0.01), (shx, 0, shz - 0.01), 0.05, 0.05, f"clavicle_{side}", nu=20, nv=10)
+        sh.ellipsoid((shx, 0, shz - 0.012), (0.056, 0.056, 0.06), f"upperarm_{side}", e1=0.9, e2=0.9, nu=36, nv=18)
+        sh.capsule((shx, 0, shz - 0.03), (shx, 0, elb + 0.02), 0.05, 0.043, f"upperarm_{side}", nu=28, nv=14)
+        sh.ellipsoid((shx, 0, elb), (0.045, 0.045, 0.045), f"forearm_{side}", nu=28, nv=14)
+        sh.capsule((shx, 0, elb - 0.01), (shx, 0, wr + 0.03), 0.043, 0.037, f"forearm_{side}", nu=28, nv=14)
+        sh.ellipsoid((shx, 0, wr - 0.02), (0.042, 0.038, 0.055), f"hand_{side}", e1=0.9, e2=0.9, nu=32, nv=16)       # mitten
+        ring((shx + sx * 0.04, 0, wr - 0.018), 0.017, (sx, 0, 0), f"hand_{side}", r=0.0035)                          # palm ring
+        tb = bones[bone_index[f"finger_thumb_1_{side}"]]
+        sh.capsule(tb[2] + Vector((0, 0.0, 0.008)), tb[3] + Vector((0, -0.004, -0.01)), 0.017, 0.014, tb[0], nu=16, nv=8)  # thumb
+        hx = L["hip_x"] * sx
+        hip, knee, ank = L["hip"], L["knee"], L["ankle"]
+        sh.ellipsoid((hx, 0, hip), (0.058, 0.058, 0.058), f"thigh_{side}", nu=28, nv=14)
+        sh.capsule((hx, 0, hip - 0.01), (hx, 0, knee + 0.01), 0.055, 0.047, f"thigh_{side}", nu=28, nv=14)
+        sh.ellipsoid((hx, 0, knee), (0.047, 0.047, 0.047), f"shin_{side}", nu=24, nv=12)
+        sh.capsule((hx, 0, knee - 0.01), (hx, 0, ank + 0.02), 0.047, 0.042, f"shin_{side}", nu=24, nv=12)
+        fl = S.get("foot", 1.0)
+        sh.ellipsoid((hx, -0.03 * fl / 0.8, 0.04), (0.055, 0.09 * fl / 0.8, 0.04), f"foot_{side}", e1=0.8, e2=0.85, nu=36, nv=18)
+        dk.ellipsoid((hx, -0.03 * fl / 0.8, 0.011), (0.057, 0.093 * fl / 0.8, 0.012), f"foot_{side}", e1=0.5, e2=0.85, nu=32, nv=8)
+        gl.ellipsoid((hx, -0.112 * fl / 0.8, 0.026), (0.032, 0.0035, 0.0045), f"toe_{side}", e1=0.5, axis=(0, -1, 0), nu=20, nv=8)
+    return face_y
+
+
 # --------------------------------------------------------------------------- main build
 def build(style_name, out_glb, out_blend=None, out_json=None):
     S = STYLES[style_name]
@@ -524,6 +595,8 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
     bpy.context.view_layer.objects.active = arm_obj
     arm_obj.select_set(True)
     bones = build_bones(S, L)
+    if S.get("default_emotion"):
+        arm_obj["default_emotion"] = S["default_emotion"]
     bpy.ops.object.mode_set(mode="EDIT")
     ebs = {}
     for name, parent, head, tail in bones:
@@ -553,15 +626,20 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
     for k in ("face",):
         mats[k].use_backface_culling = False
     humanoid = S.get("kind") == "humanoid"
-    if humanoid:
+    mascot = S.get("kind") == "mascot"
+    if humanoid or mascot:
         for k in ("dark", "accent", "glow", "face"):  # replace the generic ones (avoid ".001" duplicate names the engine looks up)
             bpy.data.materials.remove(mats[k])
-        mats["uniform"] = make_material("Mat_Uniform", S["uniform"], 0.1, 0.34, 0.9)
+        if humanoid:
+            mats["uniform"] = make_material("Mat_Uniform", S["uniform"], 0.1, 0.34, 0.9)
         mats["dark"] = make_material("Mat_Dark", S["dark"], 0.2, 0.28, 0.8)
         mats["accent"] = make_material("Mat_Accent", S["accent"], 0.9, 0.25, 0.4)
         mats["glow"] = make_material("Mat_Glow", (0.02, 0.02, 0.025), 0.0, 0.4, 0.0, S["glow"], 1.7)
         mats["face"] = make_material("Mat_Face", (0.02, 0.02, 0.025), 0.0, 0.5, 0.0, S["glow"], 1.5)
         mats["face"].use_backface_culling = False
+        if mascot:  # deep glossy black faceplate (less env reflection than the generic visor)
+            bpy.data.materials.remove(mats["visor"])
+            mats["visor"] = make_material("Mat_Visor", (0.0, 0.0, 0.002), 0.0, 0.2, 0.0)
     keys = ("shell", "shell2", "dark", "accent", "visor", "glow") + (("uniform",) if humanoid else ())
     parts = {k: Part("Body_" + k.capitalize() if k not in ("visor", "glow") else k.capitalize(), bone_index) for k in keys}
     P = parts
@@ -573,7 +651,9 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
     eb_ = S["e_box"]
     r = S["limb_r"]
 
-    if humanoid:
+    if mascot:
+        face_y = mascot_parts(P, S, L, bones, bone_index)
+    elif humanoid:
         face_y = humanoid_parts(P, S, L, bones, bone_index)
     else:
         # ---- head
@@ -674,7 +754,7 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
             "eyeBlink": mk(top=0.04, bot=0.04),
             "eyeSquint": mk(top=0.62, bot=0.2, cy=-0.1 * eh_),
             "eyeWide": eye_shape(ew * 1.12, eh_ * 1.3, inner=inner),
-            "eyeHappy": mk(crescent=0.42, cy=-0.1 * eh_, top=0.62),
+            "eyeHappy": mk(crescent=0.3 if S.get("hide_idle_face") else 0.42, cy=-0.1 * eh_, top=0.62),
             "eyeSad": mk(top_slope=1.0, top=0.82, bot=0.9),
             "eyeAngry": mk(top_slope=-1.15, top=0.8, bot=0.85, cy=-0.05 * eh_),
             "eyeSurprised": eye_shape(ew * 0.9, eh_ * 1.45, inner=inner, p=2.2),
@@ -686,10 +766,10 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         face_objs.append(o)
 
     mw = W
-    mouth_base = mouth_shape(mw)
+    mouth_base = mouth_shape(0.0001, thick=0.0001) if S.get("hide_idle_face") else mouth_shape(mw)
     shapes = {
         "mouthOpen": mouth_shape(mw * 0.9, 0.85),
-        "viseme_sil": mouth_shape(mw),
+        "viseme_sil": mouth_shape(0.0001, thick=0.0001) if S.get("hide_idle_face") else mouth_shape(mw),
         "viseme_PP": mouth_shape(mw * 0.62, 0.0, thick=0.011),
         "viseme_FF": mouth_shape(mw * 0.82, 0.22, curve=-0.1, up=0.3),
         "viseme_TH": mouth_shape(mw * 0.8, 0.38, up=0.35),
@@ -723,7 +803,7 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
             "browInnerUp": mk(inner_dz=0.022, outer_dz=-0.004),
             "browInnerDown": mk(inner_dz=-0.02, outer_dz=0.006),
         }
-        face_objs.append(make_face_mesh(f"Brow_{side}", None, arm_obj, "head", bone_index, bone_names, mk(), face_y,
+        face_objs.append(make_face_mesh(f"Brow_{side}", None, arm_obj, "head", bone_index, bone_names, brow_shape(0.0002, th=0.0001, inner=inner) if S.get("hide_idle_face") else mk(), face_y,
                                         bc, mats["face"], shapes, 7, 2))
 
     # ---- export
@@ -737,7 +817,7 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
                    for o in bpy.data.objects if o.type == "MESH"},
         "materials": [m.name for m in bpy.data.materials],
         "layout": {k: round(v, 4) for k, v in L.items()},
-        "height_m": round(hc + hrz * (1.0 if humanoid else 1.4), 3),
+        "height_m": round(hc + hrz * (1.0 if humanoid or mascot else 1.4), 3),
     }
     if out_json:
         with open(out_json, "w") as f:

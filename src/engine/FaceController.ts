@@ -1,8 +1,8 @@
 import * as THREE from "three";
 
 export type EmotionName =
-  | "neutral" | "happy" | "sad" | "surprised" | "thinking" | "angry" | "curious" | "friendly" | "error";
-export const EMOTIONS: EmotionName[] = ["neutral", "happy", "sad", "surprised", "thinking", "angry", "curious", "friendly", "error"];
+  | "neutral" | "happy" | "sad" | "surprised" | "thinking" | "angry" | "curious" | "friendly" | "content" | "error";
+export const EMOTIONS: EmotionName[] = ["neutral", "happy", "sad", "surprised", "thinking", "angry", "curious", "friendly", "content", "error"];
 
 export type EyeExpression = "neutral" | "happy" | "sad" | "angry" | "surprised" | "curious" | "squint" | "wide" | "closed";
 export const EYE_EXPRESSIONS: EyeExpression[] = ["neutral", "happy", "sad", "angry", "surprised", "curious", "squint", "wide", "closed"];
@@ -14,6 +14,8 @@ const EMOTION_TABLE: Record<EmotionName, Weights> = {
   neutral: {},
   happy: { eyeHappy: 0.95, browUp: 0.25, mouthSmile: 1 },
   friendly: { eyeHappy: 0.4, browUp: 0.12, mouthSmile: 0.55 },
+  /** soft ^ ^ eyes, no mouth: the mascot's resting face */
+  content: { eyeHappy: 0.9 },
   sad: { eyeSad: 1, browInnerUp: 1, mouthFrown: 0.85 },
   surprised: { eyeSurprised: 1, browUp: 1, mouthSurprise: 0.95 },
   thinking: { eyeSquint: 0.35, "browUp.L": 0.7, "browDown.R": 0.45, "eyeCurious.L": 0.4, mouthFrown: 0.15 },

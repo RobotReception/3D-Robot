@@ -1,4 +1,4 @@
-# Character design: four styles, comparison, decision
+# Character design: five styles, comparison, decision
 
 All three are **original** designs produced by the same generator (`blender/build_robot.py --style <name>`) on the **same skeleton and morph targets**, so any of them can be driven by the same code. Renders below come from the real GLBs in the real engine (`docs/screenshots/design-directions.png`).
 
@@ -61,3 +61,12 @@ Requested after reviewing two concept images (a glossy white/black assistant and
 **Honest comparison with the references:** the concept images are rendered/AI-generated stills with sculpted organic surfaces, subsurface-like gloss and photographic lighting. Concierge is procedurally modelled from rounded primitives and open-surface patches, so it is cleaner and closer in proportion and detailing (panel plating, ring joints, uniform, glowing accents) but **not photo-realistic** and not hand-sculpted: expect a stylised game/product-grade robot, not those renders. Remaining gaps: hand realism (2-phalanx rig limits finger detail), no fabric/cloth, no logo/name-tag text, simple face (LED shapes, no eyelid highlights). For art-director quality, sculpt in Blender on top of `assets/models/robot_concierge.blend` keeping the bone/shape-key names.
 
 Fixes made along the way: the back plate of all styles had its depth/height swapped (it protruded behind the torso) and is corrected; the viewer's camera presets now adapt to the model's height and head size.
+
+
+## Mascot — original chibi assistant
+
+Built from a reference image of a cute white mascot-style robot (generic look; no brand or named character is reproduced). `--style mascot`: ~1.1 m, head ≈ 45 % of the height, pear-shaped egg body, plush rounded limbs, mitten hands with a thumb and a glowing palm ring, deep-black oval faceplate, headphone-style ear caps with large glowing lavender rings, glowing neck ring, small glow dashes on belly and shoes. Same 40-bone rig and morph targets; resting face `content` (soft ^ ^ eyes, no mouth — brows and mouth stay invisible until used), declared in the GLB (`default_emotion` extra) so any tool/engine can read it; `robot.defaultEmotion` exposes it.
+
+![Mascot](screenshots/mascot-sheet.png)
+
+Differences from the humanoids you should know about: fingers are not modelled (mitten + thumb), so finger presets (fist/point) have no visible effect; arm/leg segments are short, so poses authored for adult proportions (e.g. hand-to-chin `thinking`, wide `happy` arms) look different and `pointAt` reach is small; locomotion speed scales with leg length (max ≈ 0.34 m/s). The faceplate reflects the environment map, so it reads as glossy black with grey highlights rather than a pure black screen.

@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { loadModelNode, type RobotStyle } from "./helpers/loadRobot";
 import { REQUIRED_BONES, REQUIRED_MORPHS, JointSpace } from "../src/engine/rig";
 
-const styles: RobotStyle[] = ["friendly", "futuristic", "premium", "concierge"];
+const styles: RobotStyle[] = ["friendly", "futuristic", "premium", "concierge", "mascot"];
 
 describe.each(styles)("robot model (%s)", (style) => {
   it("is a skinned, rigged model with the documented bones and morph targets", async () => {
@@ -29,15 +29,16 @@ describe.each(styles)("robot model (%s)", (style) => {
     expect(parts.materials.has("Mat_Glow")).toBe(true);
   });
 
-  it("has a sane rest pose (head above 0.95 m, ankles on the ground, arms beside the torso, left = +X, straight legs)", async () => {
+  it("has a sane rest pose (head above the pelvis, ankles on the ground, arms beside the torso, left = +X, straight legs)", async () => {
     const { parts } = await loadModelNode(style);
     const c = new THREE.Group();
     c.add(parts.scene);
     const js = new JointSpace(c);
     const box = new THREE.Box3().setFromObject(parts.skinned.find((m) => m.name === "Body_Shell")!);
     void box;
-    expect(js.restWorldPos("head").y).toBeGreaterThan(0.95);
-    expect(js.restWorldPos("foot_L").y).toBeCloseTo(0.085, 2);
+    expect(js.restWorldPos("head").y).toBeGreaterThan(0.5);
+    expect(js.restWorldPos("foot_L").y).toBeGreaterThan(0.04);
+    expect(js.restWorldPos("foot_L").y).toBeLessThan(0.1);
     expect(js.restWorldPos("hand_L").x).toBeGreaterThan(js.restWorldPos("pelvis").x + 0.15);
     // left is +X on both sides
     expect(js.restWorldPos("thigh_L").x).toBeGreaterThan(0);

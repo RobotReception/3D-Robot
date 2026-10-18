@@ -94,6 +94,8 @@ export interface RobotAvatarOptions {
   clips?: typeof BUILTIN_CLIPS;
   autoBlink?: boolean;
   idleGaze?: boolean;
+  /** overrides the model's default resting emotion */
+  defaultEmotion?: EmotionName;
   /** deterministic random source (tests) */
   rng?: () => number;
 }
@@ -130,6 +132,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   audio: AudioController | null = null;
 
   time = 0;
+  /** emotion used when idle / after reset (model default, e.g. "friendly" for the mascot) */
+  defaultEmotion: EmotionName = "neutral";
   private reach: Record<Side, Reach> = {
     L: { target: null, handLength: 0.13, weight: 0, goal: 0, hold: null },
     R: { target: null, handLength: 0.13, weight: 0, goal: 0, hold: null },
@@ -172,6 +176,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
       const mat = parts.materials.get(name) as THREE.MeshStandardMaterial | undefined;
       if (mat) this.glowBase.set(mat, { color: mat.emissive.clone(), intensity: mat.emissiveIntensity });
     }
+    this.defaultEmotion = (opts.defaultEmotion ?? parts.defaultEmotion ?? "neutral") as EmotionName;
+    this.face.setEmotion(this.defaultEmotion);
     this.animation.play("idle", { fadeIn: 0.01 });
     this.update(0.016);
   }
@@ -377,7 +383,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
   private maybeRestoreEmotion(anim: string) {
     if (!this.animation.isPlaying(anim) || this.speech) return;
-    if (this.stateMachine.state === "idle" && ANIMATION_EMOTION[anim] === this.face.emotion.name) this.face.setEmotion("neutral");
+    if (this.stateMachine.state === "idle" && ANIMATION_EMOTION[anim] === this.face.emotion.name) this.face.setEmotion(this.defaultEmotion);
   }
   stopAnimation(name?: string) {
     if (name === "walking" || name === "turning") return this.locomotion.stop();
@@ -787,6 +793,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
       this.reach[s].target = null;
     }
     this.face.reset();
+    this.face.setEmotion(this.defaultEmotion);
     this.gaze.setTarget(null);
     this.gaze.manualEyes = { L: null, R: null };
     this.stateMachine.reset();
