@@ -12,6 +12,7 @@ describe("face & emotions", () => {
       angry: [["Eye_L", "eyeAngry"], ["Brow_R", "browInnerDown"]],
       curious: [["Eye_L", "eyeCurious"], ["Brow_L", "browUp"]],
       thinking: [["Eye_L", "eyeSquint"], ["Brow_L", "browUp"], ["Brow_R", "browDown"]],
+      content: [["Eye_L", "eyeHappy"], ["Eye_R", "eyeHappy"]],
       error: [["Eye_L", "eyeSad"], ["Mouth", "mouthFrown"]],
     };
     for (const e of EMOTIONS) {

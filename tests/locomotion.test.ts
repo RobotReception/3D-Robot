@@ -157,7 +157,7 @@ describe("locomotion (IK-planted walking)", () => {
     for (const style of ["friendly", "futuristic", "concierge", "mascot"] as const) {
       const r = await makeRobot(style);
       void r.walkTo({ x: 0, z: 2 });
-      run(r, 6);
+      run(r, 14); // the short-legged mascot walks at ~0.34 m/s
       expect(Math.abs(r.root.position.z - 2)).toBeLessThan(0.08);
       for (const s of ["L", "R"] as const) expect(wp(r, `foot_${s}`).y).toBeGreaterThan(r.joints.restWorldPos("foot_L").y - 0.005);
     }
