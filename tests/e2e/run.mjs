@@ -245,6 +245,31 @@ await check("head / arm / mouth sliders call the Robot API (moveHead, moveArm, s
   return r;
 });
 
+await check("Joints tab: torso slider, wink and per-eye controls reach the real bones/morphs", async () => {
+  await page.click('[data-testid="reset"]');
+  await page.click('[data-testid="tab-Joints"]');
+  await page.locator('[data-testid="torso-yaw"]').fill("30");
+  await page.click('[data-testid="wink-left"]');
+  const peaks = await page.evaluate(async () => {
+    const r = window.robot; let pl = 0, pr = 0;
+    const L = r.parts.meshes.get("Eye_L"), R = r.parts.meshes.get("Eye_R");
+    const t0 = performance.now();
+    window.viewer.stop();
+    let last = t0;
+    while (performance.now() - t0 < 1500) {
+      await new Promise((res) => setTimeout(res, 8));
+      const now = performance.now(); r.update((now - last) / 1000); last = now;
+      pl = Math.max(pl, L.morphTargetInfluences[L.morphTargetDictionary.eyeBlink]);
+      pr = Math.max(pr, R.morphTargetInfluences[R.morphTargetDictionary.eyeBlink]);
+    }
+    window.viewer.start();
+    return { pl, pr, torsoYaw: r.joints.currentEuler("spine").y + r.joints.currentEuler("chest").y };
+  });
+  ok(peaks.pl > 0.9 && peaks.pr < 0.05, "wink should close only the left eye: " + JSON.stringify(peaks));
+  ok(Math.abs(peaks.torsoYaw - 30) < 3, "torso slider did not turn the upper body: " + peaks.torsoYaw);
+  return peaks;
+});
+
 await check("JSON command console executes commands; invalid input reports an error", async () => {
   await page.click('[data-testid="tab-Developer"]');
   await page.locator('[data-testid="json-input"]').fill('{"cmd":"setEmotion","emotion":"surprised","id":42}');

@@ -10,10 +10,12 @@ Implemented in `src/engine/commands.ts`; tested in `tests/api.test.ts` and the b
 { "cmd": "lookAt", "target": { "x": 0, "y": 1.4, "z": 2 } }     // null to release
 { "cmd": "moveHead", "yaw": 20, "pitch": 10, "roll": 0, "hold": 3 }
 { "cmd": "moveArm", "side": "right", "shoulder": 30, "elbow": 45, "wrist": 10 }
+{ "cmd": "moveTorso", "yaw": 20, "pitch": 10 }
+{ "cmd": "setEyeDirection", "yaw": 15, "pitch": 5, "eye": "left" }   // eye: both|left|right; "release": true to follow lookAt
 { "cmd": "moveJoint", "bone": "spine", "y": 15 }   { "cmd": "releaseJoint", "bone": "spine" }
 { "cmd": "setHand", "side": "left", "pose": "fist" }            // or "curl": {"index":1,"middle":0}
 { "cmd": "pointAt", "target": { "x": 1, "y": 1.3, "z": 1 }, "hand": "auto", "hold": 3 }
-{ "cmd": "setMouthOpen", "value": 0.5 }   { "cmd": "blink" }
+{ "cmd": "setMouthOpen", "value": 0.5 }   { "cmd": "blink" }   { "cmd": "blink", "eye": "left" }   // wink
 { "cmd": "walkTo", "x": 2, "z": 3, "speed": 0.8, "facing": 180, "wait": true }
 { "cmd": "turn", "degrees": 90 }   { "cmd": "turn", "to": 180 }
 { "cmd": "speak", "text": "Hello", "lang": "en-US", "emotion": "friendly", "visemes": [ ... ], "wait": true }

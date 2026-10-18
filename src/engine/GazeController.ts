@@ -17,11 +17,12 @@ export class GazeController {
   /** fraction of the angle taken by the head (rest goes to the eyes) */
   headShare = 0.7;
   enabled = true;
-  /** manual eye direction in degrees (yaw + = toward the character's left, pitch + = up); null = follow the look-at target */
-  manualEyes: { yaw: number; pitch: number } | null = null;
+  /** manual eye direction per eye in degrees (yaw + = toward the character's left, pitch + = up); null = follow the look-at target */
+  manualEyes: { L: { yaw: number; pitch: number } | null; R: { yaw: number; pitch: number } | null } = { L: null, R: null };
 
   private eyeYaw = 0;
   private eyePitch = 0;
+  private eyeCur = { L: { yaw: 0, pitch: 0 }, R: { yaw: 0, pitch: 0 } };
   private headYaw = 0;
   private headPitch = 0;
   private wanderYaw = 0;
@@ -80,22 +81,26 @@ export class GazeController {
     this.headPitch = damp(this.headPitch, hp, 0.2, dt);
     let ey = THREE.MathUtils.clamp(tyaw - this.headYaw, -EYE_TRAVEL.maxYaw, EYE_TRAVEL.maxYaw) + this.saccadeYaw;
     let ep = THREE.MathUtils.clamp(tpitch - this.headPitch, -EYE_TRAVEL.maxPitch, EYE_TRAVEL.maxPitch) + this.saccadePitch;
-    if (this.manualEyes) {
-      ey = this.manualEyes.yaw;
-      ep = this.manualEyes.pitch;
-    }
     this.eyeYaw = damp(this.eyeYaw, ey, 0.055, dt);
     this.eyePitch = damp(this.eyePitch, ep, 0.055, dt);
+    for (const side of ["L", "R"] as const) {
+      const m = this.manualEyes[side];
+      this.eyeCur[side].yaw = damp(this.eyeCur[side].yaw, m ? m.yaw : ey, 0.055, dt);
+      this.eyeCur[side].pitch = damp(this.eyeCur[side].pitch, m ? m.pitch : ep, 0.055, dt);
+    }
 
     // head 65% / neck 35% of the head angle; sign: +pitch = look up = negative X rotation
     const q = new THREE.Quaternion();
     this.joints.applyDelta("head", eulerToQuat({ x: -this.headPitch * 0.65, y: this.headYaw * 0.65, z: 0 }, "YXZ", q));
     this.joints.applyDelta("neck", eulerToQuat({ x: -this.headPitch * 0.35, y: this.headYaw * 0.35, z: 0 }, "YXZ", q));
-    const off = new THREE.Vector3(
-      THREE.MathUtils.clamp(this.eyeYaw / EYE_TRAVEL.maxYaw, -1, 1) * EYE_TRAVEL.x,
-      THREE.MathUtils.clamp(this.eyePitch / EYE_TRAVEL.maxPitch, -1, 1) * EYE_TRAVEL.y,
-      0,
-    );
-    for (const s of ["L", "R"]) this.joints.setPositionOffset(`eye_${s}`, off);
+    for (const s of ["L", "R"] as const) {
+      const c = this.eyeCur[s];
+      const off = new THREE.Vector3(
+        THREE.MathUtils.clamp(c.yaw / EYE_TRAVEL.maxYaw, -1, 1) * EYE_TRAVEL.x,
+        THREE.MathUtils.clamp(c.pitch / EYE_TRAVEL.maxPitch, -1, 1) * EYE_TRAVEL.y,
+        0,
+      );
+      this.joints.setPositionOffset(`eye_${s}`, off);
+    }
   }
 }

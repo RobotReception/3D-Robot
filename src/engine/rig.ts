@@ -307,6 +307,8 @@ export interface ArmAngles {
   wrist?: number;
   /** wrist flexion (+ = hand forward/up) */
   wristFlex?: number;
+  /** shoulder (clavicle) shrug: + raises the shoulder, - lowers it (-15..25) */
+  shrug?: number;
 }
 export interface HeadAngles {
   /** + = turn toward the character's left */

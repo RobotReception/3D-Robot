@@ -17,13 +17,15 @@ export type RobotCommand =
   | { cmd: "setEyeExpression"; expression: EyeExpression | null }
   | { cmd: "lookAt"; target: Vec3 | null }
   | { cmd: "moveHead"; yaw?: number; pitch?: number; roll?: number; fade?: number; hold?: number }
-  | { cmd: "moveArm"; side: "left" | "right"; shoulder?: number; abduction?: number; twist?: number; elbow?: number; wrist?: number; wristFlex?: number; fade?: number; hold?: number }
+  | { cmd: "moveArm"; side: "left" | "right"; shoulder?: number; abduction?: number; twist?: number; elbow?: number; wrist?: number; wristFlex?: number; shrug?: number; fade?: number; hold?: number }
+  | { cmd: "moveTorso"; yaw?: number; pitch?: number; roll?: number; fade?: number; hold?: number }
+  | { cmd: "setEyeDirection"; yaw?: number; pitch?: number; eye?: "both" | "left" | "right"; release?: boolean }
   | { cmd: "moveJoint"; bone: string; x?: number; y?: number; z?: number; fade?: number; hold?: number }
   | { cmd: "releaseJoint"; bone?: string }
   | { cmd: "setHand"; side: "left" | "right"; pose?: string; curl?: FingerCurl }
   | { cmd: "pointAt"; target: Vec3; hand?: "left" | "right" | "auto"; hold?: number }
   | { cmd: "setMouthOpen"; value: number | null }
-  | { cmd: "blink" }
+  | { cmd: "blink"; eye?: "both" | "left" | "right" }
   | { cmd: "walkTo"; x: number; z: number; speed?: number; facing?: number; wait?: boolean }
   | { cmd: "turn"; degrees?: number; to?: number; wait?: boolean }
   | { cmd: "speak"; text?: string; audioUrl?: string; lang?: string; emotion?: EmotionName; lipSync?: boolean; gestures?: boolean; rate?: number; visemes?: VisemeEvent[]; tts?: boolean; wait?: boolean }
@@ -38,7 +40,7 @@ export type RobotCommand =
   | { cmd: "getStatus" };
 
 export const COMMAND_NAMES = [
-  "playAnimation", "stopAnimation", "setEmotion", "setEyeExpression", "lookAt", "moveHead", "moveArm", "moveJoint", "releaseJoint",
+  "playAnimation", "stopAnimation", "setEmotion", "setEyeExpression", "lookAt", "moveHead", "moveArm", "moveTorso", "setEyeDirection", "moveJoint", "releaseJoint",
   "setHand", "pointAt", "setMouthOpen", "blink", "walkTo", "turn", "speak", "setState", "setSpeed", "setGlow", "stop", "resetPose",
   "wait", "sequence", "parallel", "getStatus",
 ] as const;
@@ -149,9 +151,17 @@ async function run(robot: RobotAvatar, c: Record<string, unknown>): Promise<unkn
     case "moveArm":
       robot.moveArm(side(c), {
         shoulder: num(c, "shoulder", false), abduction: num(c, "abduction", false), twist: num(c, "twist", false),
-        elbow: num(c, "elbow", false), wrist: num(c, "wrist", false), wristFlex: num(c, "wristFlex", false),
+        elbow: num(c, "elbow", false), wrist: num(c, "wrist", false), wristFlex: num(c, "wristFlex", false), shrug: num(c, "shrug", false),
       }, opts(c));
       return;
+    case "moveTorso":
+      robot.moveTorso({ yaw: num(c, "yaw", false), pitch: num(c, "pitch", false), roll: num(c, "roll", false) }, opts(c));
+      return;
+    case "setEyeDirection": {
+      const eye = c.eye === undefined ? "both" : oneOf(str(c, "eye"), ["both", "left", "right"] as const, "eye");
+      robot.setEyeDirection(c.release === true ? null : { yaw: num(c, "yaw", false), pitch: num(c, "pitch", false) }, eye);
+      return;
+    }
     case "moveJoint":
       robot.moveJoint(str(c, "bone")!, { x: num(c, "x", false), y: num(c, "y", false), z: num(c, "z", false) }, opts(c));
       return;
@@ -168,7 +178,7 @@ async function run(robot: RobotAvatar, c: Record<string, unknown>): Promise<unkn
       robot.setMouthOpen(c.value === null ? null : num(c, "value")!);
       return;
     case "blink":
-      robot.blink();
+      robot.blink(c.eye === undefined ? "both" : oneOf(str(c, "eye"), ["both", "left", "right"] as const, "eye"));
       return;
     case "walkTo": {
       const p = robot.walkTo({ x: num(c, "x")!, z: num(c, "z")! }, { speed: num(c, "speed", false), facing: num(c, "facing", false) });

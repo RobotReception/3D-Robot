@@ -69,7 +69,10 @@ export class FaceController {
   private manualBlinkQueued = false;
   blinkDuration = 0.22;
 
-  private blinkEnv = 0;
+  private blinkL = 0;
+  private blinkR = 0;
+  private manualBlinkSide: "both" | "L" | "R" = "both";
+  private blinkSide: "both" | "L" | "R" = "both";
   private visemes: Record<string, number> = {};
   private speaking = 0; // smoothed 0..1
   private speakingTarget = 0;
@@ -101,8 +104,10 @@ export class FaceController {
   get eyeExpression() {
     return this.eyeOverride;
   }
-  blink() {
+  /** Blink both eyes, or wink one ("L" = the robot's left eye). */
+  blink(side: "both" | "L" | "R" = "both") {
     this.manualBlinkQueued = true;
+    this.manualBlinkSide = side;
   }
   /** null returns control of `mouthOpen` to speech/expressions */
   setMouthOpen(v: number | null) {
@@ -137,6 +142,7 @@ export class FaceController {
       this.nextBlink -= dt;
       if (this.manualBlinkQueued || (this.autoBlink && this.nextBlink <= 0)) {
         this.blinkT = 0;
+        this.blinkSide = this.manualBlinkQueued ? this.manualBlinkSide : "both";
         this.manualBlinkQueued = false;
         this.nextBlink = 2.2 + this.rng() * 3.8;
         if (this.rng() < 0.15) this.nextBlink = 0.25; // occasional double blink
@@ -153,7 +159,8 @@ export class FaceController {
       blink = Math.max(0, Math.min(1, blink));
     }
 
-    this.blinkEnv = blink;
+    this.blinkL = this.blinkSide === "R" ? 0 : blink;
+    this.blinkR = this.blinkSide === "L" ? 0 : blink;
     const emo = EMOTION_TABLE[this.emotionName];
     const eyeSrc = this.eyeOverride ? EYE_TABLE[this.eyeOverride] : emo;
     const attenuation = 1 - 0.6 * this.speaking;
@@ -205,7 +212,10 @@ export class FaceController {
       const idx = mesh.morphTargetDictionary?.[morph];
       if (idx === undefined) continue;
       let out = v;
-      if (meshName.startsWith("Eye_")) out = morph === "eyeBlink" ? Math.max(v, this.blinkEnv) : v * (1 - this.blinkEnv);
+      if (meshName.startsWith("Eye_")) {
+        const b = meshName === "Eye_L" ? this.blinkL : this.blinkR;
+        out = morph === "eyeBlink" ? Math.max(v, b) : v * (1 - b);
+      }
       mesh.morphTargetInfluences![idx] = Math.min(1, Math.max(0, out));
     }
   }

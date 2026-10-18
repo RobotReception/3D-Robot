@@ -26,7 +26,7 @@ scene.add(robot.root);                                               // or viewe
 | `setEmotion(name, intensity=1)` | `neutral, happy, sad, surprised, thinking, angry, curious, friendly, error` — smoothly blends eye/brow/mouth morphs. |
 | `setEyeExpression(name\|null)` | Eyes only: `neutral, happy, sad, angry, surprised, curious, squint, wide, closed`. `null` returns control to the emotion. |
 | `setMouthOpen(0..1\|null)` | Direct jaw/mouth opening (independent of speech); `null` releases. |
-| `blink()`; `face.autoBlink` | Manual blink; random auto-blink (2–6 s, occasional double). |
+| `blink("both"\|"left"\|"right")`; `face.autoBlink` | Manual blink or **wink** one eye; random auto-blink (2–6 s, occasional double). |
 | `setGlow(color?, boost?)`, `setEyeColor(color)` | Recolour emissive materials at runtime. |
 
 ## Gaze
@@ -34,14 +34,15 @@ scene.add(robot.root);                                               // or viewe
 | Call | Behaviour |
 |---|---|
 | `lookAt({x,y,z} \| Object3D \| null)` | World-space target; eyes lead, head/neck follow (70 % of the angle). An `Object3D` (e.g. the camera) is tracked every frame. `null` → idle wander (`gaze.idleWander`). |
-| `setEyeDirection({yaw,pitch}\|null)` | Eyes only (±26° / ±19°); `null` follows `lookAt` again. |
+| `setEyeDirection({yaw,pitch}\|null, eye="both"\|"left"\|"right")` | Steer both or **each eye independently** (±26° / ±19°); `null` follows `lookAt` again. |
 
 ## Direct joint control (absolute, clamped to natural limits)
 
 | Call | Behaviour |
 |---|---|
 | `moveHead({yaw,pitch,roll}, {fade,hold,smooth})` | yaw + = left, pitch + = up, roll + = tilt left; combined head+neck range ±85°/±50°/±45°. |
-| `moveArm("left"\|"right", {shoulder,abduction,twist,elbow,wrist,wristFlex}, opts)` | Only the given angles are overridden (others keep following the animation). Mirrors automatically. |
+| `moveArm("left"\|"right", {shoulder,abduction,twist,elbow,wrist,wristFlex,shrug}, opts)` | Only the given angles are overridden (others keep following the animation). Mirrors automatically; `shrug` raises/lowers the shoulder (clavicle, −15…25). |
+| `moveTorso({yaw,pitch,roll}, opts)` | Upper-body turn/lean split 55 % spine / 45 % chest: yaw + = left (±60°), pitch + = lean forward (−30…45°), roll + = lean left (±25°). |
 | `moveJoint(bone, {x,y,z}, opts)` | Raw joint-space angles for any bone in [RIG.md](RIG.md) (eyes excluded). |
 | `releaseJoint(bone?)` | Return a joint (or all) to the animation. `hold` auto-releases after N seconds. |
 | `getJointAngles(bone)`, `listJoints()` | Current angle, limits, whether overridden. |

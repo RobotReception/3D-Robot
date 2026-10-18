@@ -356,8 +356,9 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   setMouthOpen(value: number | null) {
     this.face.setMouthOpen(value);
   }
-  blink() {
-    this.face.blink();
+  /** Blink both eyes (default) or wink one: `blink("left")`. */
+  blink(eye: "both" | "left" | "right" = "both") {
+    this.face.blink(eye === "left" ? "L" : eye === "right" ? "R" : "both");
   }
   setGlow(color?: THREE.ColorRepresentation, boost = 0) {
     for (const [mat, base] of this.glowBase) {
@@ -382,9 +383,28 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     }
   }
 
-  /** Point the eyes (degrees) independently of the head; pass null to resume following the look-at target. */
-  setEyeDirection(dir: { yaw?: number; pitch?: number } | null) {
-    this.gaze.manualEyes = dir ? { yaw: dir.yaw ?? 0, pitch: dir.pitch ?? 0 } : null;
+  /**
+   * Point the eyes (degrees) independently of the head; `eye` selects one eye or both.
+   * Pass null to resume following the look-at target.
+   */
+  setEyeDirection(dir: { yaw?: number; pitch?: number } | null, eye: "both" | "left" | "right" = "both") {
+    const v = dir ? { yaw: dir.yaw ?? 0, pitch: dir.pitch ?? 0 } : null;
+    if (eye !== "right") this.gaze.manualEyes.L = v ? { ...v } : null;
+    if (eye !== "left") this.gaze.manualEyes.R = v ? { ...v } : null;
+  }
+
+  /** Upper-body lean/turn (degrees): yaw + = turn left, pitch + = lean forward, roll + = lean left. Split spine 55 % / chest 45 %. */
+  moveTorso(a: { yaw?: number; pitch?: number; roll?: number }, o: { fade?: number; hold?: number; smooth?: number } = {}) {
+    const yaw = a.yaw === undefined ? undefined : THREE.MathUtils.clamp(a.yaw, -60, 60);
+    const pitch = a.pitch === undefined ? undefined : THREE.MathUtils.clamp(a.pitch, -30, 45);
+    const roll = a.roll === undefined ? undefined : THREE.MathUtils.clamp(a.roll, -25, 25);
+    for (const [bone, k] of [["spine", 0.55], ["chest", 0.45]] as const) {
+      const ang: Partial<EulerDeg> = {};
+      if (pitch !== undefined) ang.x = pitch * k;
+      if (yaw !== undefined) ang.y = yaw * k;
+      if (roll !== undefined) ang.z = -roll * k;
+      this.overrides.set(bone, ang, o);
+    }
   }
 
   // ================================================================ direct joint control
@@ -422,6 +442,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     if (a.wrist !== undefined) fa.y = pose[`forearm_${s}`][1];
     if (Object.keys(fa).length) req[`forearm_${s}`] = fa;
     if (a.wristFlex !== undefined) req[`hand_${s}`] = { x: pose[`hand_${s}`][0] };
+    if (a.shrug !== undefined) req[`clavicle_${s}`] = { z: (s === "R" ? -1 : 1) * a.shrug };
     for (const [bone, ang] of Object.entries(req)) this.overrides.set(bone, ang, o);
     this.reach[s].goal = 0; // direct control cancels IK reach
   }
@@ -721,7 +742,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     }
     this.face.reset();
     this.gaze.setTarget(null);
-    this.gaze.manualEyes = null;
+    this.gaze.manualEyes = { L: null, R: null };
     this.stateMachine.reset();
     this.setGlow();
     if (o.position) {

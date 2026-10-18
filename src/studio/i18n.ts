@@ -35,7 +35,7 @@ const AR: Record<string, string> = {
   "WebGL is not available": "WebGL غير متاح على هذا الجهاز أو المتصفح",
   "Loading robot...": "جاري تحميل الروبوت...",
   Lighting: "الإضاءة", "Key light": "الضوء الرئيسي", "Light angle": "زاوية الضوء", Exposure: "التعريض", "Show floor grid": "إظهار شبكة الأرضية",
-  Left: "يسار", Right: "يمين", Up: "أعلى",
+  Left: "يسار", Right: "يمين", Up: "أعلى", "Wink L": "غمزة يسار", "Wink R": "غمزة يمين", Torso: "الجذع", Lean: "ميل أمامي", Shrug: "رفع الكتف",
 };
 
 export function makeT(lang: Lang) {

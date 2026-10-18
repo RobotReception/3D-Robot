@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { makeRobot, run, lp, morph } from "./helpers/robot";
+import { makeRobot, run, lp, wp, morph } from "./helpers/robot";
 import { executeCommand, executeMessage } from "../src/engine/commands";
 import { attachBridge, type BridgeTransport } from "../src/engine/bridge";
 import { ASSISTANT_STATES } from "../src/engine/stateMachine";
@@ -125,6 +125,49 @@ describe("Robot API is wired to real bones and morphs", () => {
     expect(moved.x - c.x).toBeGreaterThan(0.025);
     expect(Math.abs(moved.z - c.z)).toBeLessThan(0.015); // translation inside the visor plane
     r.setEyeDirection(null);
+  });
+
+  it("each eye can be steered independently, and one eye can wink", async () => {
+    const r = await makeRobot();
+    run(r, 0.5);
+    const l0 = lp(r, "eye_L");
+    const r0 = lp(r, "eye_R");
+    r.setEyeDirection({ yaw: 26, pitch: 0 }, "left");
+    r.setEyeDirection({ yaw: -26, pitch: 0 }, "right");
+    run(r, 1);
+    expect(lp(r, "eye_L").x - l0.x).toBeGreaterThan(0.025);
+    expect(lp(r, "eye_R").x - r0.x).toBeLessThan(-0.025); // cross-eyed: right eye moved the other way
+    r.setEyeDirection(null);
+    r.blink("left");
+    let peakL = 0;
+    let peakR = 0;
+    for (let i = 0; i < 40; i++) {
+      r.update(1 / 60);
+      peakL = Math.max(peakL, morph(r, "Eye_L", "eyeBlink"));
+      peakR = Math.max(peakR, morph(r, "Eye_R", "eyeBlink"));
+    }
+    expect(peakL).toBeGreaterThan(0.95);
+    expect(peakR).toBeLessThan(0.02); // wink: the other eye stays open
+  });
+
+  it("moveTorso turns/leans the upper body (spine+chest) and moveArm shrug lifts a shoulder", async () => {
+    const r = await makeRobot();
+    run(r, 0.3);
+    const shrugOnly = await makeRobot();
+    run(shrugOnly, 0.3);
+    const sh0 = lp(shrugOnly, "upperarm_L").y;
+    shrugOnly.moveArm("left", { shrug: 20 });
+    run(shrugOnly, 1);
+    expect(lp(shrugOnly, "upperarm_L").y).toBeGreaterThan(sh0 + 0.02); // shoulder rose
+    r.moveTorso({ yaw: 40, pitch: 20, roll: 10 });
+    run(r, 1.2);
+    const e = (b: string) => r.joints.currentEuler(b);
+    expect(e("spine").y + e("chest").y).toBeCloseTo(40, 0);
+    expect(e("spine").x + e("chest").x).toBeCloseTo(20, 0);
+    expect(r.root.worldToLocal(wp(r, "head")).x).toBeGreaterThan(0.01); // leaning to the left (+X)
+    r.moveTorso({ yaw: 500, pitch: 500 }); // clamped
+    run(r, 1);
+    expect(e("spine").y + e("chest").y).toBeLessThanOrEqual(60.5);
   });
 
   it("pointAt solves arm IK: the fingertip reaches a reachable target and the arm is unclamped", async () => {

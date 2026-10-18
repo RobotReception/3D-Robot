@@ -15,6 +15,23 @@
 ## Built-in clips (generated from the code)
 
 <!-- clips:start -->
+| Clip | Type | Length | Priority | Channels | Description |
+|---|---|---|---|---|---|
+| `idle` | loop | 12s | 0 | torso, head, armL, armR, fingersL, fingersR | Natural standing: breathing, weight shift, micro head and arm motion. |
+| `listening` | loop | 6s | 1 | torso, head, armL, armR, fingersL, fingersR | Attentive: slight lean toward the user, head tilt and slow nodding. |
+| `thinking` | loop | 6s | 1 | torso, head, armR, armL, fingersR, fingersL | Hand-to-chin pose, head tilted and turned away. |
+| `talkR` | loop | 6.4s | 3 | armR, fingersR | Light right-hand speech gesture. |
+| `talkL` | loop | 6s | 3 | armL, fingersL | Light left-hand speech gesture. |
+| `greeting` | one-shot | 3s | 6 | armR, fingersR, head, torso | Friendly raised-hand wave with a welcoming head tilt. |
+| `goodbye` | one-shot | 3.6s | 6 | armR, fingersR, head, torso | Slow farewell wave finishing with a small bow. |
+| `pointing` | one-shot | 2.6s | 8 | armR, fingersR, head | Right arm extended forward-right, index finger extended. |
+| `happy` | one-shot | 2.2s | 6 | armL, armR, fingersL, fingersR, head, torso | Cheerful bounce with arms raised. |
+| `sad` | one-shot | 3.4s | 6 | armL, armR, torso, head, fingersL, fingersR | Head and shoulders drop, slow sigh. |
+| `surprised` | one-shot | 1.8s | 6 | armL, armR, fingersL, fingersR, torso, head | Quick recoil with raised open hands. |
+| `error` | one-shot | 2.2s | 6 | armL, armR, head, torso, fingersL, fingersR | Apologetic shrug with a head shake. |
+| `nod` | one-shot | 1.2s | 5 | head | Two small head nods (acknowledge). |
+| `shake` | one-shot | 1.2s | 5 | head | Head shake (disagree). |
+| `bow` | one-shot | 2.4s | 6 | torso, head | Polite bow. |
 <!-- clips:end -->
 
 Required states map as: Idle/Listening/Thinking/Happy/Sad/Surprised/Greeting/Pointing/Error/Goodbye = clips above; **Speaking** = `robot.speak()` (talk gestures + lip-sync + head-bob); **Walking/Turning** = locomotion (`playAnimation("walking")`, `walkTo`, `turnTo`).
