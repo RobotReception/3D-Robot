@@ -83,6 +83,8 @@ export class RobotViewer {
   private frameMsAcc = 0;
   quality: QualityLevel = "high";
   background: BackgroundPreset = "studio";
+  /** current lighting values (read by the Studio sliders) */
+  light = { intensity: 2.4, angleDeg: 31, exposure: 1.05, grid: true };
   onFrame: ((dt: number) => void)[] = [];
   /** follow the robot with the orbit target (face/upper presets) */
   followTarget: (() => THREE.Vector3) | null = null;
@@ -191,9 +193,9 @@ export class RobotViewer {
     this.key.shadow.map?.dispose();
     this.key.shadow.map = null;
     this.renderer.toneMapping = c.toneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = this.light.exposure;
     this.scene.environmentIntensity = c.envIntensity;
-    this.grid.visible = q !== "low";
+    this.grid.visible = q !== "low" && this.light.grid;
     this.floor.receiveShadow = c.shadows;
     // materials need recompiling when shadows toggle
     this.scene.traverse((o) => {
@@ -210,17 +212,22 @@ export class RobotViewer {
     (this.floor.material as THREE.MeshStandardMaterial).color.set(p.floor);
     this.renderer.setClearColor(0x000000, p.color ? 1 : 0);
   }
+  /** key light intensity and azimuth (degrees around the robot, 0 = from the front) */
   setKeyLight(intensity: number, angleDeg?: number) {
+    this.light.intensity = intensity;
     this.key.intensity = intensity;
     if (angleDeg !== undefined) {
+      this.light.angleDeg = angleDeg;
       const a = (angleDeg * Math.PI) / 180;
       this.key.position.set(Math.sin(a) * 4.5, 4, Math.cos(a) * 4.5);
     }
   }
   setExposure(v: number) {
+    this.light.exposure = v;
     this.renderer.toneMappingExposure = v;
   }
   showGrid(on: boolean) {
+    this.light.grid = on;
     this.grid.visible = on;
     this.ring.visible = on;
   }

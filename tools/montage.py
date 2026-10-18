@@ -1,6 +1,9 @@
 import json, sys
 from PIL import Image, ImageDraw
-files = json.load(open('/tmp/claude-0/sheet_files.json'))
+import glob
+files = []
+for jf in (sys.argv[3:] or ['/tmp/claude-0/sheet_files.json']):
+    files += json.load(open(jf))
 out = sys.argv[1]; cols = int(sys.argv[2]) if len(sys.argv) > 2 else 4
 ims = [(n, Image.open(f).convert('RGB')) for n, f in files]
 w, h = ims[0][1].size

@@ -29,7 +29,7 @@ describe.each(styles)("robot model (%s)", (style) => {
     expect(parts.materials.has("Mat_Glow")).toBe(true);
   });
 
-  it("has a sane human-scale rest pose (1.4-1.7 m, feet on the ground, arms beside the torso)", async () => {
+  it("has a sane rest pose (head above 0.95 m, ankles on the ground, arms beside the torso, left = +X, straight legs)", async () => {
     const { parts } = await loadModelNode(style);
     const c = new THREE.Group();
     c.add(parts.scene);

@@ -22,7 +22,7 @@ if (style !== "premium") {
 await page.evaluate(() => { window.viewer.stop(); window.robot.stopSpeech(); });
 const files = [];
 for (const [i, it] of items.entries()) {
-  const [name, js, secs] = it.split("|");
+  const [name, js, secs, cam1] = it.split("|");
   await page.evaluate(async ({ js, secs, cam }) => {
     const r = window.robot;
     r.resetPose({ position: true });
@@ -32,11 +32,11 @@ for (const [i, it] of items.entries()) {
     for (let k = 0; k < n; k++) r.update(1 / 60);
     window.viewer.setCameraPreset(cam, false, r);
     window.viewer.frame(0);
-  }, { js, secs, cam });
-  const f = `/tmp/claude-0/sheet_${i}.png`;
+  }, { js, secs, cam: cam1 || cam });
+  const f = `/tmp/claude-0/sheet_${process.env.PREFIX || ""}${i}.png`;
   await page.screenshot({ path: f });
   files.push([name, f]);
 }
 await browser.close();
-fs.writeFileSync("/tmp/claude-0/sheet_files.json", JSON.stringify(files));
+fs.writeFileSync(`/tmp/claude-0/sheet_${process.env.PREFIX || ""}files.json`, JSON.stringify(files));
 console.log(JSON.stringify(files.map((f) => f[0])));

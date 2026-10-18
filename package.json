@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:e2e": "node tests/e2e/run.mjs",
     "model:build": "bash tools/build_models.sh",
-    "audio:build": "python3 tools/make_test_audio.py"
+    "audio:build": "python3 tools/make_test_audio.py",
+    "docs:gen": "tsx tools/gen_docs.ts",
+    "ws:example": "node tools/ws_example_server.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.2",

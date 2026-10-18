@@ -34,6 +34,8 @@ const AR: Record<string, string> = {
   Neutral: "محايد", Angry: "غضب", Curious: "فضول", Friendly: "ودود",
   "WebGL is not available": "WebGL غير متاح على هذا الجهاز أو المتصفح",
   "Loading robot...": "جاري تحميل الروبوت...",
+  Lighting: "الإضاءة", "Key light": "الضوء الرئيسي", "Light angle": "زاوية الضوء", Exposure: "التعريض", "Show floor grid": "إظهار شبكة الأرضية",
+  Left: "يسار", Right: "يمين", Up: "أعلى",
 };
 
 export function makeT(lang: Lang) {

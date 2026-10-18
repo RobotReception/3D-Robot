@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { connectWebSocket } from "../../engine/bridge";
 import { executeMessage } from "../../engine/commands";
 import { useCoreChange, useStudio, useTick } from "../StudioContext";
-import { Chip, Row, Section } from "../ui";
+import { Chip, Row, Section, Slider } from "../ui";
 
 const EXAMPLES: Record<string, unknown> = {
   "greet + emotion": { cmd: "sequence", steps: [{ cmd: "setEmotion", emotion: "happy" }, { cmd: "playAnimation", name: "greeting" }, { cmd: "speak", text: "Hello!", tts: false }] },
@@ -36,6 +36,13 @@ export function DevPanel() {
 
   return (
     <>
+      <Section title={t("Lighting")}>
+        <Slider label={t("Key light")} min={0} max={6} step={0.1} unit="" value={v.light.intensity} onChange={(x) => v.setKeyLight(x)} testId="light-intensity" />
+        <Slider label={t("Light angle")} min={-180} max={180} step={1} value={v.light.angleDeg} onChange={(x) => v.setKeyLight(v.light.intensity, x)} testId="light-angle" />
+        <Slider label={t("Exposure")} min={0.3} max={2.5} step={0.05} unit="" value={v.light.exposure} onChange={(x) => v.setExposure(x)} testId="exposure" />
+        <label className="inline"><input type="checkbox" checked={v.light.grid} onChange={(e) => { v.showGrid(e.target.checked); core.emitChange(); }} />{t("Show floor grid")}</label>
+      </Section>
+
       <Section title={t("Performance")}>
         <div className="stats" data-testid="stats">
           <div><b>{st.fps}</b><span>FPS</span></div>

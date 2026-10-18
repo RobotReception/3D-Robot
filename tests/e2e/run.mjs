@@ -260,6 +260,25 @@ await check("JSON command console executes commands; invalid input reports an er
   return true;
 });
 
+await check("lighting controls change the real lights and exposure", async () => {
+  await page.locator('[data-testid="light-intensity"]').fill("4.5");
+  await page.locator('[data-testid="light-angle"]').fill("-90");
+  await page.locator('[data-testid="exposure"]').fill("1.6");
+  await page.waitForTimeout(300);
+  const l = await page.evaluate(() => ({ key: window.viewer.light, exposure: window.viewer.renderer.toneMappingExposure }));
+  ok(l.key.intensity === 4.5 && l.key.angleDeg === -90 && Math.abs(l.exposure - 1.6) < 1e-6, JSON.stringify(l));
+  await page.selectOption('[data-testid="bg-select"]', "light");
+  await page.waitForTimeout(300);
+  const bg = await page.evaluate(() => window.viewer.scene.background?.getHexString());
+  ok(bg === "dfe5ee", "background not applied: " + bg);
+  await page.screenshot({ path: path.join(shotDir, "studio-lighting-light-bg.png") });
+  await page.selectOption('[data-testid="bg-select"]', "studio");
+  await page.locator('[data-testid="light-intensity"]').fill("2.4");
+  await page.locator('[data-testid="light-angle"]').fill("31");
+  await page.locator('[data-testid="exposure"]').fill("1.05");
+  return l;
+});
+
 await check("developer panel shows live FPS, draw calls and engine CPU time", async () => {
   await page.waitForTimeout(1200);
   const stats = await page.evaluate(() => ({ ...window.viewer.stats, engineMs: window.studio.engineMs }));
