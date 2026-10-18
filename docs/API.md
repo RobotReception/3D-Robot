@@ -78,6 +78,14 @@ s.pushPCM16(chunk); s.pushVisemes(events?); s.end();
 - With **text only**: browser `speechSynthesis` if a voice exists (re-synced on `boundary`), otherwise a silent timed preview (used by tests/headless).
 - Events: `speech:start`, `speech:end {interrupted}`. `lipsync.offsetMs/gain/hybrid` tune sync. Details: [LIPSYNC.md](LIPSYNC.md).
 
+## Data-driven motions (JSON) — see [MOTION_AUTHORING.md](MOTION_AUTHORING.md)
+
+| Call | Behaviour |
+|---|---|
+| `registerMotion(json, {overwrite?})` → `{ok, def, errors[], warnings[]}` | Validates + compiles a JSON motion (semantic angles, sparse keys, events). Never throws; errors carry exact paths. On success it is playable with `playAnimation(name)`. Built-in names are protected. |
+| `listMotions()`, `getMotion(name)` | Custom motion names; JSON of a custom or built-in motion (built-ins are sampled into raw keys). |
+| `compileMotion`, `exportMotion`, `MOTION_SCHEMA` | Pure functions/schema usable without a robot (CI validation of motion files). |
+
 ## Events, status, lifecycle
 
 `robot.on(type, fn)` / `once` / `off`, wildcard `"*"`. Types: `animation:start|end|blocked`, `emotion`, `state`, `speech:start|end`, `walk:start|end`, `command`, `error`.

@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RobotMotion",
+  "type": "object",
+  "required": [
+    "name",
+    "duration",
+    "keys"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9_-]{1,40}$",
+      "description": "unique id, e.g. 'proudWave'"
+    },
+    "description": {
+      "type": "string"
+    },
+    "duration": {
+      "type": "number",
+      "minimum": 0.2,
+      "maximum": 30,
+      "description": "seconds"
+    },
+    "loop": {
+      "type": "boolean",
+      "description": "true: first and last key must have the same values"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8,
+      "description": "3 speech gesture, 5 head, 6 emotive one-shot (default), 8 commanded gesture"
+    },
+    "fadeIn": {
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 3
+    },
+    "fadeOut": {
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 3
+    },
+    "easing": {
+      "enum": [
+        "smooth",
+        "linear"
+      ]
+    },
+    "keys": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 240,
+      "items": {
+        "type": "object",
+        "required": [
+          "t"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "t": {
+            "type": "number",
+            "minimum": 0,
+            "description": "seconds, <= duration"
+          },
+          "head": {
+            "type": "object",
+            "properties": {
+              "yaw": {
+                "type": "number",
+                "description": "+ = left, deg"
+              },
+              "pitch": {
+                "type": "number",
+                "description": "+ = up"
+              },
+              "roll": {
+                "type": "number",
+                "description": "+ = tilt left"
+              }
+            },
+            "additionalProperties": false
+          },
+          "torso": {
+            "type": "object",
+            "properties": {
+              "yaw": {
+                "type": "number"
+              },
+              "pitch": {
+                "type": "number",
+                "description": "+ = lean forward"
+              },
+              "roll": {
+                "type": "number",
+                "description": "+ = lean left"
+              }
+            },
+            "additionalProperties": false
+          },
+          "armL": {
+            "$ref": "#/$defs/arm"
+          },
+          "armR": {
+            "$ref": "#/$defs/arm"
+          },
+          "handL": {
+            "$ref": "#/$defs/hand"
+          },
+          "handR": {
+            "$ref": "#/$defs/hand"
+          },
+          "pelvis": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false,
+            "description": "meters, |v| <= 0.08"
+          },
+          "raw": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "description": "bone name -> [x,y,z] raw joint-space degrees"
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "type": "object",
+        "required": [
+          "t"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "t": {
+            "type": "number",
+            "minimum": 0
+          },
+          "emotion": {
+            "enum": [
+              "neutral",
+              "happy",
+              "sad",
+              "surprised",
+              "thinking",
+              "angry",
+              "curious",
+              "friendly",
+              "error"
+            ]
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "eyeExpression": {
+            "enum": [
+              "neutral",
+              "happy",
+              "sad",
+              "angry",
+              "surprised",
+              "curious",
+              "squint",
+              "wide",
+              "closed",
+              null
+            ]
+          },
+          "blink": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "arm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shoulder": {
+          "type": "number",
+          "minimum": -60,
+          "maximum": 190,
+          "description": "+ = raise forward, 90 = horizontal, 180 = up"
+        },
+        "abduction": {
+          "type": "number",
+          "minimum": -30,
+          "maximum": 88,
+          "description": "+ = raise sideways"
+        },
+        "twist": {
+          "type": "number",
+          "minimum": -95,
+          "maximum": 95
+        },
+        "elbow": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 150,
+          "description": "flexion"
+        },
+        "wrist": {
+          "type": "number",
+          "minimum": -85,
+          "maximum": 85
+        },
+        "wristFlex": {
+          "type": "number",
+          "minimum": -70,
+          "maximum": 70
+        },
+        "shrug": {
+          "type": "number",
+          "minimum": -15,
+          "maximum": 25
+        }
+      }
+    },
+    "hand": {
+      "oneOf": [
+        {
+          "enum": [
+            "open",
+            "relaxed",
+            "fist",
+            "point",
+            "thumbsUp",
+            "pinch"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "thumb": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "index": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "middle": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "ring": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

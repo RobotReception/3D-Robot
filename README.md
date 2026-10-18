@@ -19,8 +19,8 @@ a **Control Studio** to test everything.
 ```bash
 npm install
 npm run dev            # Control Studio at http://localhost:5173
-npm test               # 89 unit/integration tests (headless, real GLB models)
-npm run test:e2e       # 27 browser tests (Chromium + WebGL): Studio, audio lip-sync, WebSocket, R3F
+npm test               # 96 unit/integration tests (headless, real GLB models)
+npm run test:e2e       # 28 browser tests (Chromium + WebGL): Studio, audio lip-sync, WebSocket, R3F
 npm run build          # type-check + production build (dist/)
 ```
 
@@ -63,7 +63,9 @@ Works with plain three.js ([examples/minimal.html](examples/minimal.html)) and R
 | Research & decisions | `docs/RESEARCH.ar.md` | technology comparison with sources |
 | Character design | `blender/build_robot.py`, `assets/models/` | [docs/DESIGN.md](docs/DESIGN.md) |
 | Rig (40 bones, 43 morph targets: 19 mouth/visemes, 2×8 eyes, 2×4 brows) | `src/engine/rig.ts` | [docs/RIG.md](docs/RIG.md) (generated) |
-| Animation system | `src/engine/{clips,library,AnimationController}.ts` | [docs/ANIMATION.md](docs/ANIMATION.md) |
+| Animation system | `src/engine/{clips,library,AnimationController}.ts` | [docs/ANIMATION.md](docs/ANIMATION.md), [docs/MOTIONS.md](docs/MOTIONS.md) (every clip) |
+| **JSON motions (AI-authorable)** | `src/engine/motionJson.ts` | [docs/MOTION_AUTHORING.md](docs/MOTION_AUTHORING.md), [schema](docs/motion.schema.json) |
+| **Remote HTTP/WebSocket API** | `tools/remote_api_server.mjs`, `src/engine/{commands,bridge}.ts` | [docs/REMOTE_API.md](docs/REMOTE_API.md) |
 | Face + lip-sync | `src/engine/{FaceController,lipsync/*}` | [docs/LIPSYNC.md](docs/LIPSYNC.md) |
 | IK locomotion, gaze, joint overrides | `src/engine/{LocomotionController,ik,GazeController,JointOverrides}.ts` | [docs/ANIMATION.md](docs/ANIMATION.md) |
 | Robot API, state machine, JSON bridge | `src/engine/{RobotAvatar,stateMachine,commands,bridge}.ts` | [docs/API.md](docs/API.md), [docs/COMMANDS.md](docs/COMMANDS.md) |

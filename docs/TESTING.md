@@ -1,13 +1,13 @@
 # Testing & acceptance evidence
 
 ```bash
-npm test               # 89 tests, ~6 s: headless engine tests on the real shipped GLBs (all three styles)
-npm run test:e2e       # 27 browser tests: builds, serves dist/, drives the Studio in Chromium (WebGL)
+npm test               # 96 tests, ~6 s: headless engine tests on the real shipped GLBs (all three styles)
+npm run test:e2e       # 28 browser tests: builds, serves dist/, drives the Studio in Chromium (WebGL)
                        # CHROME_PATH=/path/to/chrome to choose the browser; SKIP_BUILD=1 to reuse dist/
 npm run typecheck && npm run build
 ```
 
-Results of the last run: **89/89 unit-integration tests** and **27/27 browser tests** passed. Screenshots written by the E2E run are in `docs/screenshots/`.
+Results of the last run: **89/89 unit-integration tests** and **27/28 browser tests** passed. Screenshots written by the E2E run are in `docs/screenshots/`.
 
 ## What the unit/integration tests prove (Node, real GLB, no mocks)
 
@@ -19,11 +19,12 @@ Results of the last run: **89/89 unit-integration tests** and **27/27 browser te
 | `face.test.ts` | 6 | each emotion drives its characteristic morphs; smooth transitions; eye-expression override only affects eyes; blink (manual + auto); `setMouthOpen`; influences always in 0…1 |
 | `lipsync.test.ts` | 24 | EN/AR text → visemes (harakat, shadda, implicit vowels, mixed text), timing fit, Azure/Rhubarb/word/character adapters, FFT, formant recovery, **audio analysis at 16/22.05/44.1 kHz** (≥ 90 % labels correct, median onset error ≤ 60 ms), silence/noise → closed mouth, hybrid alignment, offset control, loudness gating, streaming events, live frame source, full EN/AR speech flow, peak timing |
 | `locomotion.test.ts` | 10 | arrives within 7 cm and resolves; **stance feet slide < 4 mm per frame**; ankles reach IK targets (< 25 mm) and never sink; pelvis bob < 7 cm, lateral < 6 cm; turn accuracy < 3° by stepping; turns before walking when the goal is behind; squat-bounce keeps feet planted (< 1 cm drift) and knees flex; works for all styles |
+| `motion.test.ts` | 7 | JSON motions: compile/register/play moves real bones, events, precise validation errors, limit clamping + loop warnings, built-in protection, **every built-in exports to JSON and re-compiles within 12° of the original**, JSON commands |
 | `api.test.ts` | 23 | every Robot API call changes the expected bones/morphs: `moveHead`, `moveArm`, `moveJoint`, limits/clamping, fingers, `lookAt` (point and moving object), `setEyeDirection` (per eye), wink, `moveTorso`, shrug, `pointAt` IK (fingertip within 12 cm of a reachable target; straight arm when out of reach), `resetPose`; state machine (bundles, error lock, barge-in); JSON commands (validation, sequence, parallel, wait, speak), transport bridge; **engine update = 0.19 ms/frame**; dispose |
 
 ## What the browser tests prove (real Chromium, WebGL via SwiftShader)
 
-Boot (40 bones, no console errors) · robot visible from full/face/side/back cameras (pixel check) · orbit + zoom · animation buttons really raise the hand, priorities respected · all 12 animation chips run and return to idle · emotion/eye chips drive real morph targets · walk button reaches the target · joint sliders rotate the real bone and respect limits · **click-to-pick joints** · head/arm/mouth sliders · JSON console incl. error reply · lighting + background controls · stats panel · **real audio lip-sync** · hybrid sync · EN/AR silent speech · quality tiers · style switching without GPU-memory growth · resize · Arabic RTL UI · **WebSocket bridge with a real `ws` server** · minimal embed + React Three Fiber example · phone viewport (390×844, touch) without horizontal scroll · graceful message with WebGL disabled.
+Boot (40 bones, no console errors) · robot visible from full/face/side/back cameras (pixel check) · orbit + zoom · animation buttons really raise the hand, priorities respected · all 12 animation chips run and return to idle · emotion/eye chips drive real morph targets · walk button reaches the target · joint sliders rotate the real bone and respect limits · **click-to-pick joints** · head/arm/mouth sliders · JSON console incl. error reply · lighting + background controls · stats panel · **real audio lip-sync** · hybrid sync · EN/AR silent speech · quality tiers · style switching without GPU-memory growth · resize · Arabic RTL UI · **WebSocket bridge with a real `ws` server** · **remote HTTP API (API key, register motion, commands, status, schema)** · minimal embed + React Three Fiber example · phone viewport (390×844, touch) without horizontal scroll · graceful message with WebGL disabled.
 
 ### Lip-sync numbers (honest conditions)
 
