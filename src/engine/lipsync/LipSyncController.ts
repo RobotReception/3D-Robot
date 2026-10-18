@@ -69,6 +69,13 @@ export class LipSyncController {
   get currentWeights() {
     return this.lastWeights;
   }
+  /** the timeline currently playing (for visualisation) */
+  get events(): VisemeEvent[] {
+    return this.timeline?.events ?? [];
+  }
+  get timelineDuration() {
+    return this.timeline?.duration ?? 0;
+  }
 
   playTimeline(events: VisemeEvent[], o: PlayTimelineOptions = {}) {
     this.stop();

@@ -211,7 +211,8 @@ export class AnimationController {
       for (let i = stack.length - 1; i >= 0; i--) {
         const e = stack[i];
         if (e.ending && e.weight <= 1e-4) {
-          e.action.stop();
+          // a restarted clip reuses the same cached action: only stop it if no live entry still uses it
+          if (!stack.some((o) => o !== e && o.action === e.action)) e.action.stop();
           stack.splice(i, 1);
         }
       }

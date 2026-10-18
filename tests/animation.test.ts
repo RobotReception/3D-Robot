@@ -73,6 +73,22 @@ describe("animation library", () => {
     expect(maxStep).toBeLessThan(0.1); // < 6 degrees per frame at 60 fps (a 78 deg raise in 0.55 s)
   });
 
+  it("re-playing a clip that is already playing restarts it (the shared mixer action keeps running)", async () => {
+    const r = await makeRobot();
+    r.playAnimation("greeting");
+    run(r, 1.0);
+    r.playAnimation("greeting"); // restart
+    run(r, 1.0);
+    expect(r.animation.isPlaying("greeting")).toBe(true);
+    // at t~1.0 s of the restarted clip the hand is up (a frozen action would leave it at rest)
+    expect(lp(r, "hand_R").y).toBeGreaterThan(0.95);
+    // and also after resetPose + replay (the pattern used by UIs)
+    r.resetPose();
+    r.playAnimation("greeting");
+    run(r, 1.2);
+    expect(lp(r, "hand_R").y).toBeGreaterThan(0.95);
+  });
+
   it("speed multiplier changes playback rate", async () => {
     const a = await makeRobot();
     const b = await makeRobot();

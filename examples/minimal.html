@@ -16,7 +16,7 @@
       import { RobotAvatar, RobotViewer } from "/src/index.ts";
 
       const viewer = new RobotViewer(document.getElementById("stage"), { quality: "high" });
-      const robot = await RobotAvatar.load("/models/robot_premium.glb");
+      const robot = await RobotAvatar.load("../models/robot_premium.glb");
       viewer.add(robot);
       viewer.start();
       window.robot = robot;

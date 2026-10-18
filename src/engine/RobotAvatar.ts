@@ -10,6 +10,7 @@ import { GazeController } from "./GazeController";
 import { JointOverrides } from "./JointOverrides";
 import { ANIMATION_EMOTION, BUILTIN_CLIPS } from "./library";
 import { LipSyncController } from "./lipsync/LipSyncController";
+import { activeIntervals, alignTextToActivity } from "./lipsync/align";
 import { estimateSpeechDuration, textToVisemeEvents } from "./lipsync/phonemizer";
 import type { VisemeEvent } from "./lipsync/visemes";
 import { inspectRobotModel, loadRobotGLTF, type LoadOptions, type RobotModelParts } from "./loader";
@@ -566,7 +567,11 @@ export class RobotAvatar extends Emitter<RobotEvents> {
           await this.audio.resume();
           let events: VisemeEvent[];
           if (o.visemes) events = o.visemes;
-          else if (o.text) events = textToVisemeEvents(o.text, { totalDuration: loaded.buffer.duration * 0.98 });
+          else if (o.text) {
+            // hybrid: place the text's visemes inside the audio's real speech segments
+            events = alignTextToActivity(o.text, activeIntervals(loaded.envelope.data, loaded.envelope.hop));
+            if (!events.length) events = textToVisemeEvents(o.text, { totalDuration: loaded.buffer.duration * 0.98 });
+          }
           else events = loaded.analysis.events;
           audioHandle = this.audio.play(loaded.buffer);
           this.emit("speech:start", { text: o.text, mode, duration: loaded.buffer.duration });

@@ -288,3 +288,40 @@ describe("LipSyncController -> mouth morph targets", () => {
     expect(new VisemeTimeline([{ time: 0, viseme: "aa", duration: 1 }]).at(0.5)?.viseme).toBe("aa");
   });
 });
+
+describe("hybrid alignment (text placed inside real speech)", () => {
+  it("phrases map to audio runs: no viseme is placed in silence and phrase onsets match the audio", async () => {
+    const { activeIntervals, alignTextToActivity } = await import("../src/engine/lipsync/align");
+    const { loudnessEnvelope } = await import("../src/engine/lipsync/audioAnalysis");
+    // two spoken phrases separated by 0.6 s of silence, with silence at both ends
+    const a = synthesize([
+      { kind: "sil", dur: 0.3 }, { kind: "vowel", v: "aa", dur: 0.3 }, { kind: "vowel", v: "E", dur: 0.3 },
+      { kind: "sil", dur: 0.6 }, { kind: "vowel", v: "O", dur: 0.35 }, { kind: "vowel", v: "U", dur: 0.35 }, { kind: "sil", dur: 0.4 },
+    ], 16000);
+    const hop = 0.01;
+    const env = loudnessEnvelope(a.samples, a.sampleRate, hop);
+    const iv = activeIntervals(env, hop);
+    expect(iv).toHaveLength(2);
+    expect(iv[0].start).toBeCloseTo(0.3, 1);
+    expect(iv[1].start).toBeCloseTo(1.5, 1);
+    const ev = alignTextToActivity("hello world, amazing sound", iv);
+    // the text has one comma -> 2 phrases -> they land on the 2 runs
+    expect(ev.length).toBeGreaterThan(6);
+    const inside = (t: number) => iv.some((r) => t >= r.start - 0.02 && t <= r.end + 0.02);
+    for (const e of ev) {
+      expect(inside(e.time)).toBe(true);
+      expect(inside(e.time + e.duration! - 0.001)).toBe(true);
+    }
+    expect(Math.min(...ev.filter((e) => e.time < 1.2).map((e) => e.time))).toBeCloseTo(iv[0].start, 1);
+    expect(Math.min(...ev.filter((e) => e.time >= 1.2).map((e) => e.time))).toBeCloseTo(iv[1].start, 1);
+  });
+
+  it("falls back to proportional spreading over all active time when the counts differ", async () => {
+    const { alignTextToActivity } = await import("../src/engine/lipsync/align");
+    const ev = alignTextToActivity("one two three four", [{ start: 0.5, end: 1.0 }, { start: 2.0, end: 2.5 }]);
+    expect(ev[0].time).toBeCloseTo(0.5, 2);
+    const last = ev[ev.length - 1];
+    expect(last.time + last.duration!).toBeCloseTo(2.5, 2);
+    expect(ev.every((e) => (e.time >= 0.5 - 1e-6 && e.time + e.duration! <= 1.0 + 1e-6) || (e.time >= 2.0 - 1e-6 && e.time + e.duration! <= 2.5 + 1e-6))).toBe(true);
+  });
+});

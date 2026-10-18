@@ -16,6 +16,7 @@ export type { Viseme, VisemeEvent } from "./engine/lipsync/visemes";
 export { textToVisemeEvents, estimateSpeechDuration } from "./engine/lipsync/phonemizer";
 export { fromAzureVisemes, fromRhubarb, fromWordTimings, fromCharacterAlignment } from "./engine/lipsync/adapters";
 export { analyzeAudioBuffer } from "./engine/lipsync/audioAnalysis";
+export { alignTextToActivity, activeIntervals } from "./engine/lipsync/align";
 export { AudioController } from "./engine/AudioController";
 export { AssistantStateMachine, ASSISTANT_STATES } from "./engine/stateMachine";
 export type { AssistantState } from "./engine/stateMachine";

@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { REQUIRED_BONES, REQUIRED_MORPHS } from "./rig";
 
@@ -17,10 +16,13 @@ export interface RobotModelParts {
   materials: Map<string, THREE.Material>;
 }
 
-function configure(loader: GLTFLoader, opts: LoadOptions) {
+async function configure(opts: LoadOptions) {
+  const loader = new GLTFLoader();
   // Meshopt keeps morph targets/skins intact and decodes fast (preferred for characters).
   loader.setMeshoptDecoder(MeshoptDecoder);
   if (opts.dracoPath) {
+    // lazy: the Draco decoder is only fetched when a Draco-compressed model is actually loaded
+    const { DRACOLoader } = await import("three/examples/jsm/loaders/DRACOLoader.js");
     const d = new DRACOLoader();
     d.setDecoderPath(opts.dracoPath);
     loader.setDRACOLoader(d);
@@ -29,11 +31,12 @@ function configure(loader: GLTFLoader, opts: LoadOptions) {
 }
 
 export async function loadRobotGLTF(url: string, opts: LoadOptions = {}): Promise<GLTF> {
-  return configure(new GLTFLoader(), opts).loadAsync(url);
+  return (await configure(opts)).loadAsync(url);
 }
 
-export function parseRobotGLTF(data: ArrayBuffer, opts: LoadOptions = {}): Promise<GLTF> {
-  return new Promise((res, rej) => configure(new GLTFLoader(), opts).parse(data, "", res, rej));
+export async function parseRobotGLTF(data: ArrayBuffer, opts: LoadOptions = {}): Promise<GLTF> {
+  const loader = await configure(opts);
+  return new Promise((res, rej) => loader.parse(data, "", res, rej));
 }
 
 /** Validates the rig contract and indexes the parts. Throws with a precise message. */
