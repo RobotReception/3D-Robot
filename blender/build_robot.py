@@ -59,12 +59,12 @@ STYLES = {
     ),
     # Chibi mascot: huge head, small egg body, stubby limbs, glowing rings (cute assistant for kiosks/apps).
     "mascot": dict(
-        kind="mascot", head_r=0.25, head_sq=(1.0, 0.95, 0.93), e_head=0.92, torso=(0.13, 0.11, 0.2),
-        e_box=0.9, thigh=0.08, shin=0.08, limb_r=0.045, upper=0.09, fore=0.085, chest_h=0.17, hip_x=0.075, foot=0.8,
-        ankle=0.055, hand_scale=0.6, default_emotion="content",
-        shell=(0.97, 0.97, 1.0), shell2=(0.72, 0.74, 0.86), dark=(0.01, 0.011, 0.016), accent=(0.78, 0.8, 0.9),
-        glow=(0.30, 0.34, 1.0), metal=0.0, rough=0.16, coat=1.0, eye=(0.07, 0.074), eye_p=2.0, mouth_w=0.03,
-        hide_idle_face=True,
+        kind="mascot", head_r=0.35, head_sq=(1.0, 0.9, 0.83), e_head=1.0, torso=(0.172, 0.15, 0.2),
+        e_box=0.9, thigh=0.05, shin=0.055, limb_r=0.048, upper=0.085, fore=0.075, chest_h=0.06, hip_x=0.072, foot=0.8,
+        ankle=0.04, sh_x=0.168, hand_scale=0.55, default_emotion="content",
+        shell=(0.95, 0.95, 0.965), shell2=(0.72, 0.74, 0.86), dark=(0.01, 0.011, 0.016), accent=(0.36, 0.36, 0.72),
+        glow=(0.16, 0.32, 1.0), metal=0.0, rough=0.34, coat=0.6, eye=(0.125, 0.11), eye_p=2.0, mouth_w=0.035,
+        eye_x_k=0.33, eye_z_k=0.035, mouth_z_k=0.3, visor_w=0.70, visor_h=0.64, visor_z=0.12, hide_idle_face=True, glow_strength=2.4, face_strength=1.6,
     ),
 }
 
@@ -88,7 +88,7 @@ def layout(S):
     head_pivot = neck + 0.05
     head_c = head_pivot + hr * sq[2] * 0.92
     sh_z = neck - 0.075
-    sh_x = S["torso"][0] + S["limb_r"] + 0.03
+    sh_x = S.get("sh_x", S["torso"][0] + S["limb_r"] + 0.03)
     elbow = sh_z - S["upper"]
     wrist = elbow - S["fore"]
     L.update(ankle=ankle, knee=knee, hip=hip, pel=pel, spine=spine, chest=chest, neck=neck,
@@ -162,9 +162,56 @@ class Part:
         self.bone_index = bone_index
 
     def _tag(self, verts, bone):
+        """bone: a bone name (rigid) or a function(co) -> {bone: weight} for smooth skinning."""
+        if callable(bone):
+            for v in verts:
+                for bn, w in bone(v.co).items():
+                    if w > 1e-4:
+                        v[self.dl][self.bone_index[bn]] = w
+            return
         gi = self.bone_index[bone]
         for v in verts:
             v[self.dl][gi] = 1.0
+
+    def lathe(self, p0, p1, profile, bone, nu=48, nv=40, cross=(1.0, 1.0), bend=(0, 0, 0), caps=(True, True)):
+        """Seamless surface of revolution from p0 to p1. profile(t)->radius for t in 0..1 (0 at closed ends);
+        rings are denser near the ends so the caps stay round. cross scales the section (x, y); bend bows the axis."""
+        p0, p1 = Vector(p0), Vector(p1)
+        axis = (p1 - p0)
+        rot = Vector((0, 0, -1)).rotation_difference(axis.normalized()).to_matrix()
+        bendv = Vector(bend)
+        rows = []
+        for i in range(nv + 1):
+            t = (1 - math.cos(math.pi * i / nv)) / 2
+            r = profile(t)
+            c = p0 + axis * t + bendv * math.sin(math.pi * t)
+            ring = []
+            if r < 1e-5:
+                ring = [self.bm.verts.new(c)]
+            else:
+                for j in range(nu):
+                    u = 2 * math.pi * j / nu
+                    ring.append(self.bm.verts.new(c + rot @ Vector((r * cross[0] * math.cos(u), r * cross[1] * math.sin(u), 0))))
+            rows.append(ring)
+        for i in range(nv):
+            a, b = rows[i], rows[i + 1]
+            for j in range(nu):
+                k = (j + 1) % nu
+                if len(a) == 1 and len(b) > 1:
+                    self.bm.faces.new((a[0], b[j], b[k]))
+                elif len(b) == 1 and len(a) > 1:
+                    self.bm.faces.new((a[k], a[j], b[0]))
+                elif len(a) > 1:
+                    self.bm.faces.new((a[j], b[j], b[k], a[k]))
+        self._tag([v for r_ in rows for v in r_], bone)
+
+    def grid(self, rows, bone):
+        """Quad sheet from a 2-D list of points (rows x cols)."""
+        vs = [[self.bm.verts.new(Vector(p)) for p in row] for row in rows]
+        for i in range(len(vs) - 1):
+            for j in range(len(vs[0]) - 1):
+                self.bm.faces.new((vs[i][j], vs[i][j + 1], vs[i + 1][j + 1], vs[i + 1][j]))
+        self._tag([v for r_ in vs for v in r_], bone)
 
     def ellipsoid(self, center, radii, bone, e1=1.0, e2=1.0, axis=(0, 0, 1), nu=28, nv=16,
                   taper=(1.0, 1.0), roll=0.0):
@@ -337,10 +384,11 @@ def brow_shape(w, dz=0.0, inner_dz=0.0, outer_dz=0.0, th=0.0095, nu=7, nv=2, inn
 
 
 def make_face_mesh(name, obj_collection, armature_obj, bone, bone_index, bone_names, basis_pts, y, center, material,
-                   shapes, nu, nv):
+                   shapes, nu, nv, project=None):
     """Planar grid on y = const, positions = center + (x, z). Shape keys from `shapes` {name: pts}."""
     me = bpy.data.meshes.new(name)
-    verts = [(center[0] + x, y, center[1] + z) for (x, z) in basis_pts]
+    Y = (lambda x_, z_: project(x_, z_)) if project else (lambda x_, z_: y)
+    verts = [(center[0] + x, Y(center[0] + x, center[1] + z), center[1] + z) for (x, z) in basis_pts]
     faces = []
     for j in range(nv - 1):
         for i in range(nu - 1):
@@ -356,7 +404,7 @@ def make_face_mesh(name, obj_collection, armature_obj, bone, bone_index, bone_na
     for kname, pts in shapes.items():
         sk = obj.shape_key_add(name=kname, from_mix=False)
         for idx, (x, z) in enumerate(pts):
-            sk.data[idx].co = Vector((center[0] + x, y, center[1] + z))
+            sk.data[idx].co = Vector((center[0] + x, Y(center[0] + x, center[1] + z), center[1] + z))
     for bn in bone_names:
         obj.vertex_groups.new(name=bn)
     vg = obj.vertex_groups[bone]
@@ -522,64 +570,123 @@ def humanoid_parts(P, S, L, bones, bone_index):
 
 
 def mascot_parts(P, S, L, bones, bone_index):
-    """Chibi mascot: plush-like white shell, huge head, glowing ring accents. Returns the face-plane y."""
+    """Chibi mascot built for smooth, seamless curves:
+    - body, arms (with mitten) and legs are single lathed surfaces with *smooth* skin weights (they bend, no ball joints)
+    - the faceplate is projected onto the head ellipsoid (flush, not a goggle) and so are the eyes/mouth/brows.
+    Returns (face_y, project_fn)."""
     hr, sq = S["head_r"], S["head_sq"]
     hc = L["head_c"]
     hrx, hry, hrz = hr * sq[0], hr * sq[1], hr * sq[2]
-    tx, ty, _ = S["torso"]
     sh, dk, gl, ac, vi = P["shell"], P["dark"], P["glow"], P["accent"], P["visor"]
 
-    def ring(center, R, axis, bone, r=0.007, disc=True):
-        gl.torus(center, R, r, bone, axis=axis, nu=48, nv=8)
-        if disc:
-            dk.ellipsoid(center, (R * 0.9, R * 0.9, 0.004), bone, e1=0.5, axis=axis, nu=32, nv=6)
+    def sstep(a_, b_, x):
+        k = min(1.0, max(0.0, (x - a_) / (b_ - a_)))
+        return k * k * (3 - 2 * k)
 
-    # head
-    sh.ellipsoid((0, 0, hc), (hrx, hry, hrz), "head", e1=S["e_head"], e2=S["e_head"], nu=72, nv=40)
-    vis_c = (0, -hry * 0.78, hc + hrz * 0.03)
-    vis_depth = hry * 0.24
-    vi.ellipsoid(vis_c, (hrx * 0.86, hrz * 0.74, vis_depth), "head", e1=0.4, e2=0.85, axis=(0, -1, 0), nu=72, nv=32)
-    face_y = vis_c[1] - vis_depth - 0.0035
-    for sx in (1, -1):  # big ear caps with glowing rings
-        x0 = sx * hrx * 0.97
-        z0 = hc - 0.012
-        sh.ellipsoid((x0, 0.004, z0), (hrz * 0.44, hrz * 0.44, 0.032), "head", e1=0.5, axis=(sx, 0, 0), nu=48, nv=16)
-        ac.torus((x0 + sx * 0.03, 0.004, z0), hrz * 0.36, 0.006, "head", axis=(sx, 0, 0), nu=48, nv=8)
-        dk.ellipsoid((x0 + sx * 0.028, 0.004, z0), (hrz * 0.31, hrz * 0.31, 0.007), "head", e1=0.5, axis=(sx, 0, 0), nu=36, nv=6)
-        ring((x0 + sx * 0.034, 0.004, z0), hrz * 0.255, (sx, 0, 0), "head", r=0.009, disc=False)
-    # neck: dark collar + glowing ring
-    dk.ellipsoid((0, 0, L["neck"] + 0.02), (0.07, 0.066, 0.03), "neck", e1=0.5, nu=32, nv=10)
-    gl.torus((0, 0, L["neck"] + 0.034), 0.078, 0.0085, "neck", nu=56, nv=8)
-    # body: pear-shaped egg (wider at the belly), split over chest/pelvis with overlapping blobs
-    mid = (L["pel"] + L["neck"]) / 2
-    sh.ellipsoid((0, 0, mid + 0.02), (tx, ty, 0.2), "chest", e1=0.9, e2=0.92, taper=(1.12, 0.8), nu=56, nv=32)
-    sh.ellipsoid((0, 0, L["pel"] + 0.01), (tx * 1.02, ty * 1.0, 0.085), "pelvis", e1=0.9, e2=0.92, nu=40, nv=18)
-    gl.ellipsoid((0, -ty * 0.97, L["pel"] - 0.005), (0.036, 0.007, 0.0045), "pelvis", e1=0.5, axis=(0, -1, 0), nu=20, nv=8)  # belly dash
+    def blend(b_hi, b_lo, z_mid, half):
+        """weight function: b_hi above z_mid+half, b_lo below z_mid-half, smooth in between"""
+        def f(co):
+            w = sstep(z_mid - half, z_mid + half, co.z)
+            return {b_hi: w, b_lo: 1 - w}
+        return f
+
+    def profile(keys, cap0, cap1):
+        """keys: [(t, r)] smooth (cosine) interpolation, with elliptical caps of length cap0/cap1 (in t units)"""
+        def f(t):
+            if t <= 0 or t >= 1:
+                return 0.0
+            i = 0
+            while i < len(keys) - 2 and t > keys[i + 1][0]:
+                i += 1
+            (t0, r0), (t1, r1) = keys[i], keys[i + 1]
+            u = min(1.0, max(0.0, (t - t0) / (t1 - t0)))
+            r = r0 + (r1 - r0) * (1 - math.cos(math.pi * u)) / 2
+            if t < cap0:
+                r *= math.sqrt(max(0.0, 1 - ((cap0 - t) / cap0) ** 2))
+            if t > 1 - cap1:
+                r *= math.sqrt(max(0.0, 1 - ((t - (1 - cap1)) / cap1) ** 2))
+            return r
+        return f
+
+    def head_y(x, z, lift=0.0):
+        """front (-Y) surface of the head ellipsoid at (x, z), pushed outward by `lift` meters"""
+        q = 1 - (x / hrx) ** 2 - ((z - hc) / hrz) ** 2
+        return -hry * math.sqrt(max(q, 0.0)) - lift
+
+    # ---- head: true ellipsoid, very dense for clean highlights
+    sh.ellipsoid((0, 0, hc), (hrx, hry, hrz), "head", nu=128, nv=84)
+    # faceplate: rounded-square oval projected onto the head surface (flush, crisp edge)
+    fa, fb, fz, fp = hrx * S.get("visor_w", 0.70), hrz * S.get("visor_h", 0.64), hc + hrz * S.get("visor_z", 0.12), 2.5
+    rows = []
+    NR, NT = 22, 120
+    for i in range(NR + 1):
+        rr = i / NR
+        row = []
+        for j in range(NT + 1):
+            th = 2 * math.pi * j / NT
+            cx, cz = math.cos(th), math.sin(th)
+            k = (abs(cx) ** fp + abs(cz) ** fp) ** (-1 / fp)   # superellipse radius along this direction
+            x, z = fa * rr * k * cx, fz + fb * rr * k * cz
+            row.append((x, head_y(x, z, 0.0018), z))
+        rows.append(row)
+    vi.grid(rows, "head")
+    project = lambda x, z: head_y(x, z, 0.0045)   # face LEDs float 4.5 mm above the faceplate
+    face_y = head_y(0, hc, 0.0045)
+
+    # ---- ear lenses: white rim, glowing ring, lavender lens; aligned to the side of the head
     for sx in (1, -1):
-        shx, shz = L["sh_x"] * sx, L["sh_z"]
+        x0, z0 = sx * hrx * 0.975, hc - hrz * 0.02
+        ax = (sx, 0, 0)
+        sh.torus((x0 + sx * 0.012, 0, z0), hrz * 0.27, 0.017, "head", axis=ax, nu=64, nv=14)
+        gl.torus((x0 + sx * 0.022, 0, z0), hrz * 0.215, 0.0085, "head", axis=ax, nu=64, nv=10)
+        ac.ellipsoid((x0 + sx * 0.012, 0, z0), (hrz * 0.2, hrz * 0.2, 0.016), "head", e1=0.75, axis=ax, nu=48, nv=12)
+
+    # ---- neck: glowing ring the head floats on
+    dk.ellipsoid((0, 0, L["neck"] + 0.012), (0.075, 0.07, 0.02), "neck", e1=0.6, nu=40, nv=8)
+    gl.torus((0, 0, L["neck"] + 0.016), 0.088, 0.0115, "neck", nu=72, nv=10)
+
+    # ---- body: one seamless rounded shape (soft shoulders, slight belly), smooth weights pelvis -> spine -> chest
+    bt, bb = L["neck"] + 0.02, L["pel"] - 0.065
+    body_w = lambda co: (lambda w1, w2: {"chest": w2, "spine": w1 - w2, "pelvis": 1 - w1})(
+        sstep(L["pel"], L["spine"] + 0.02, co.z), sstep(L["spine"] + 0.02, L["chest"], co.z))
+    tx = S["torso"][0]
+    sh.lathe((0, 0, bt), (0, 0, bb), profile([(0, tx * 0.86), (0.25, tx * 0.97), (0.6, tx), (1, tx * 0.94)], 0.16, 0.22),
+             body_w, nu=72, nv=48, cross=(1.0, 0.88))
+    gl.ellipsoid((0, -S["torso"][0] * 0.88 * 0.985, bb + 0.06), (0.03, 0.0042, 0.0036), "pelvis", e1=0.5, axis=(0, -1, 0), nu=24, nv=8)
+
+    # ---- arms: shoulder -> tapered arm -> rounded mitten as ONE lathe, smooth upperarm/forearm/hand weights
+    for sx in (1, -1):
         side = "L" if sx == 1 else "R"
-        elb, wr = L["elbow"], L["wrist"]
-        sh.capsule((sx * tx * 0.4, 0, shz - 0.01), (shx, 0, shz - 0.01), 0.05, 0.05, f"clavicle_{side}", nu=20, nv=10)
-        sh.ellipsoid((shx, 0, shz - 0.012), (0.056, 0.056, 0.06), f"upperarm_{side}", e1=0.9, e2=0.9, nu=36, nv=18)
-        sh.capsule((shx, 0, shz - 0.03), (shx, 0, elb + 0.02), 0.05, 0.043, f"upperarm_{side}", nu=28, nv=14)
-        sh.ellipsoid((shx, 0, elb), (0.045, 0.045, 0.045), f"forearm_{side}", nu=28, nv=14)
-        sh.capsule((shx, 0, elb - 0.01), (shx, 0, wr + 0.03), 0.043, 0.037, f"forearm_{side}", nu=28, nv=14)
-        sh.ellipsoid((shx, 0, wr - 0.02), (0.042, 0.038, 0.055), f"hand_{side}", e1=0.9, e2=0.9, nu=32, nv=16)       # mitten
-        ring((shx + sx * 0.04, 0, wr - 0.018), 0.017, (sx, 0, 0), f"hand_{side}", r=0.0035)                          # palm ring
-        tb = bones[bone_index[f"finger_thumb_1_{side}"]]
-        sh.capsule(tb[2] + Vector((0, 0.0, 0.008)), tb[3] + Vector((0, -0.004, -0.01)), 0.017, 0.014, tb[0], nu=16, nv=8)  # thumb
+        shx, shz, elb, wr = L["sh_x"] * sx, L["sh_z"], L["elbow"], L["wrist"]
+        top, bot = shz + 0.05, wr - 0.085
+        ln = top - bot
+        def arm_w(co, elb=elb, wr=wr, side=side):
+            w_up = sstep(elb - 0.03, elb + 0.03, co.z)
+            w_hand = 1 - sstep(wr - 0.02, wr + 0.02, co.z)
+            return {f"upperarm_{side}": w_up * (1 - w_hand), f"forearm_{side}": (1 - w_up) * (1 - w_hand), f"hand_{side}": w_hand}
+        r0 = S["limb_r"] * 1.25
+        prof = profile([(0, r0), (0.35, r0 * 0.95), (0.62, r0 * 0.8), (0.8, r0 * 0.95), (1, r0 * 0.9)], r0 / ln * 0.9, r0 / ln * 1.1)
+        sh.lathe((shx - sx * 0.01, 0, top), (shx + sx * 0.012, 0, bot), prof, arm_w, nu=48, nv=44, cross=(1.0, 0.94),
+                 bend=(sx * 0.012, 0, 0))
+        # glowing ring on the mitten tip (shows when waving)
+        tipz = bot + 0.012
+        gl.torus((shx + sx * 0.012, 0, tipz), 0.024, 0.0042, f"hand_{side}", axis=(0, 0, -1), nu=40, nv=8)
+        ac.ellipsoid((shx + sx * 0.012, 0, tipz + 0.002), (0.022, 0.022, 0.004), f"hand_{side}", e1=0.6, axis=(0, 0, -1), nu=28, nv=6)
+
+    # ---- legs: short seamless stubs (thigh/shin smooth weights) + rounded shoes with a glowing toe dash
+    for sx in (1, -1):
+        side = "L" if sx == 1 else "R"
         hx = L["hip_x"] * sx
         hip, knee, ank = L["hip"], L["knee"], L["ankle"]
-        sh.ellipsoid((hx, 0, hip), (0.058, 0.058, 0.058), f"thigh_{side}", nu=28, nv=14)
-        sh.capsule((hx, 0, hip - 0.01), (hx, 0, knee + 0.01), 0.055, 0.047, f"thigh_{side}", nu=28, nv=14)
-        sh.ellipsoid((hx, 0, knee), (0.047, 0.047, 0.047), f"shin_{side}", nu=24, nv=12)
-        sh.capsule((hx, 0, knee - 0.01), (hx, 0, ank + 0.02), 0.047, 0.042, f"shin_{side}", nu=24, nv=12)
+        top, bot = L["pel"] - 0.01, ank - 0.01
+        ln = top - bot
+        r = S["limb_r"] * 1.12
+        sh.lathe((hx, 0, top), (hx, 0, bot), profile([(0, r), (0.5, r * 0.96), (1, r * 0.98)], 0.3, r / ln * 0.6),
+                 blend(f"thigh_{side}", f"shin_{side}", knee, 0.025), nu=44, nv=28)
         fl = S.get("foot", 1.0)
-        sh.ellipsoid((hx, -0.03 * fl / 0.8, 0.04), (0.055, 0.09 * fl / 0.8, 0.04), f"foot_{side}", e1=0.8, e2=0.85, nu=36, nv=18)
-        dk.ellipsoid((hx, -0.03 * fl / 0.8, 0.011), (0.057, 0.093 * fl / 0.8, 0.012), f"foot_{side}", e1=0.5, e2=0.85, nu=32, nv=8)
-        gl.ellipsoid((hx, -0.112 * fl / 0.8, 0.026), (0.032, 0.0035, 0.0045), f"toe_{side}", e1=0.5, axis=(0, -1, 0), nu=20, nv=8)
-    return face_y
-
+        sh.ellipsoid((hx, -0.018, 0.038), (r * 1.18, 0.082 * fl / 0.8, 0.04), f"foot_{side}", e1=0.72, e2=0.82, nu=56, nv=26)
+        gl.ellipsoid((hx, -0.018 - 0.082 * fl / 0.8 * 0.985, 0.028), (0.03, 0.0042, 0.004), f"toe_{side}", e1=0.5, axis=(0, -1, 0), nu=24, nv=8)
+    return face_y, project
 
 # --------------------------------------------------------------------------- main build
 def build(style_name, out_glb, out_blend=None, out_json=None):
@@ -634,12 +741,12 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
             mats["uniform"] = make_material("Mat_Uniform", S["uniform"], 0.1, 0.34, 0.9)
         mats["dark"] = make_material("Mat_Dark", S["dark"], 0.2, 0.28, 0.8)
         mats["accent"] = make_material("Mat_Accent", S["accent"], 0.9, 0.25, 0.4)
-        mats["glow"] = make_material("Mat_Glow", (0.02, 0.02, 0.025), 0.0, 0.4, 0.0, S["glow"], 1.7)
-        mats["face"] = make_material("Mat_Face", (0.02, 0.02, 0.025), 0.0, 0.5, 0.0, S["glow"], 1.5)
+        mats["glow"] = make_material("Mat_Glow", (0.02, 0.02, 0.025), 0.0, 0.4, 0.0, S["glow"], S.get("glow_strength", 1.7))
+        mats["face"] = make_material("Mat_Face", (0.02, 0.02, 0.025), 0.0, 0.5, 0.0, S["glow"], S.get("face_strength", 1.5))
         mats["face"].use_backface_culling = False
         if mascot:  # deep glossy black faceplate (less env reflection than the generic visor)
             bpy.data.materials.remove(mats["visor"])
-            mats["visor"] = make_material("Mat_Visor", (0.0, 0.0, 0.002), 0.0, 0.2, 0.0)
+            mats["visor"] = make_material("Mat_Visor", (0.0, 0.0, 0.004), 0.0, 0.16, 0.0)
     keys = ("shell", "shell2", "dark", "accent", "visor", "glow") + (("uniform",) if humanoid else ())
     parts = {k: Part("Body_" + k.capitalize() if k not in ("visor", "glow") else k.capitalize(), bone_index) for k in keys}
     P = parts
@@ -651,8 +758,9 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
     eb_ = S["e_box"]
     r = S["limb_r"]
 
+    project = None
     if mascot:
-        face_y = mascot_parts(P, S, L, bones, bone_index)
+        face_y, project = mascot_parts(P, S, L, bones, bone_index)
     elif humanoid:
         face_y = humanoid_parts(P, S, L, bones, bone_index)
     else:
@@ -742,8 +850,8 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
     # ---- face
     W = S["mouth_w"]
     ew, eh_ = S["eye"][0] * 0.5, S["eye"][1] * 0.5
-    ex = hr * 0.36
-    ez = hc + hr * 0.04
+    ex = hr * S.get("eye_x_k", 0.36)
+    ez = hc + hr * S.get("eye_z_k", 0.04)
     face_objs = []
     for side, sx in (("L", 1), ("R", -1)):
         inner = -sx  # local +x toward nose?  (eye at +x: nose is toward -x => inner = -1 for L)
@@ -762,7 +870,7 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         }
         shapes_abs = {k: v for k, v in shapes.items()}
         o = make_face_mesh(f"Eye_{side}", None, arm_obj, f"eye_{side}", bone_index, bone_names, base, face_y, ec,
-                           mats["face"], shapes_abs, EYE_NU, EYE_NV)
+                           mats["face"], shapes_abs, EYE_NU, EYE_NV, project=project)
         face_objs.append(o)
 
     mw = W
@@ -788,9 +896,9 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         "mouthFrown": mouth_shape(mw * 0.85, 0.0, curve=-1.0, thick=0.0075),
         "mouthSurprise": mouth_shape(mw * 0.42, 1.0, round_=1.0, up=0.5),
     }
-    mouth_c = (0, hc - hrz * 0.45)
+    mouth_c = (0, hc - hrz * S.get("mouth_z_k", 0.45))
     face_objs.append(make_face_mesh("Mouth", None, arm_obj, "head", bone_index, bone_names, mouth_base, face_y,
-                                    mouth_c, mats["face"], shapes, MOUTH_NU, MOUTH_NV))
+                                    mouth_c, mats["face"], shapes, MOUTH_NU, MOUTH_NV, project=project))
 
     bw = ew * 0.95
     for side, sx in (("L", 1), ("R", -1)):
@@ -804,7 +912,7 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
             "browInnerDown": mk(inner_dz=-0.02, outer_dz=0.006),
         }
         face_objs.append(make_face_mesh(f"Brow_{side}", None, arm_obj, "head", bone_index, bone_names, brow_shape(0.0002, th=0.0001, inner=inner) if S.get("hide_idle_face") else mk(), face_y,
-                                        bc, mats["face"], shapes, 7, 2))
+                                        bc, mats["face"], shapes, 7, 2, project=project))
 
     # ---- export
     meta = {

@@ -34,10 +34,9 @@ describe.each(styles)("robot model (%s)", (style) => {
     const c = new THREE.Group();
     c.add(parts.scene);
     const js = new JointSpace(c);
-    const box = new THREE.Box3().setFromObject(parts.skinned.find((m) => m.name === "Body_Shell")!);
-    void box;
-    expect(js.restWorldPos("head").y).toBeGreaterThan(0.5);
-    expect(js.restWorldPos("foot_L").y).toBeGreaterThan(0.04);
+    expect(js.restWorldPos("head").y).toBeGreaterThan(js.restWorldPos("pelvis").y + 0.15);
+    expect(js.restWorldPos("head").y).toBeGreaterThan(0.4);
+    expect(js.restWorldPos("foot_L").y).toBeGreaterThan(0.03);
     expect(js.restWorldPos("foot_L").y).toBeLessThan(0.1);
     expect(js.restWorldPos("hand_L").x).toBeGreaterThan(js.restWorldPos("pelvis").x + 0.15);
     // left is +X on both sides

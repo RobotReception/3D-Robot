@@ -30,7 +30,8 @@ for (const [i, it] of items.entries()) {
     eval(js);
     const n = Math.round(parseFloat(secs) * 60);
     for (let k = 0; k < n; k++) r.update(1 / 60);
-    window.viewer.setCameraPreset(cam, false, r);
+    if (cam === "q") { window.viewer.setCameraPreset("full", false, r); const v = window.viewer; const t = v.controls.target.clone(); const d = v.camera.position.distanceTo(t) * 0.95; v.camera.position.set(t.x + d * 0.55, t.y + 0.12, t.z + d * 0.84); v.controls.target.set(t.x, t.y + 0.08, t.z); v.controls.update(); }
+    else window.viewer.setCameraPreset(cam, false, r);
     window.viewer.frame(0);
   }, { js, secs, cam: cam1 || cam });
   const f = `/tmp/claude-0/sheet_${process.env.PREFIX || ""}${i}.png`;

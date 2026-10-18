@@ -190,6 +190,11 @@ export class RobotViewer {
         o.castShadow = true;
         o.receiveShadow = true;
         const mats = Array.isArray(m.material) ? m.material : [m.material];
+        // glossy black faceplates: keep the strong highlight but avoid a grey wash from the whole environment map
+        for (const x of mats) {
+          const s = x as THREE.MeshStandardMaterial;
+          if (s.name === "Mat_Visor" && s.metalness < 0.5) s.envMapIntensity = 0.07;
+        }
         // emissive parts (eyes, mouth, brows, ring joints) take part in the selective bloom
         if (mats.some((x) => x.name === "Mat_Glow" || x.name === "Mat_Face")) o.layers.enable(1);
       }
@@ -334,9 +339,16 @@ export class RobotViewer {
     const base = robot ? robot.root.position.clone() : new THREE.Vector3();
     const yaw = robot ? robot.root.rotation.y : 0;
     // presets were tuned for the 1.57 m premium robot (head pivot 1.12 m, eye spacing 0.155 m); adapt to the loaded model
-    const head = robot ? robot.joints.restWorldPos("head").y : 1.12;
     const eyeSpacing = robot ? robot.joints.restWorldPos("eye_L").x * 2 : 0.155;
-    const k = (head + 0.28) / 1.4; // overall size
+    // overall size from the model's real height (bind-pose bounds), so big-headed characters are framed correctly
+    let height = 1.57;
+    if (robot) {
+      // world-space bounds of the skinned meshes relative to the robot's feet (geometry bounds may be quantized)
+      robot.root.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(robot.root);
+      height = Math.max(0.3, box.max.y - robot.root.position.y);
+    }
+    const k = height / 1.57;
     const kf = eyeSpacing / 0.155; // head size
     const eyeY = robot ? robot.joints.restWorldPos("eye_L").y : 1.3;
     const yaw3 = new THREE.Vector3(0, 1, 0);
