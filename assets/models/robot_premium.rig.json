@@ -1,0 +1,652 @@
+{
+ "style": "premium",
+ "bones": [
+  {
+   "name": "root",
+   "parent": null,
+   "head": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "tail": [
+    0.0,
+    0.0,
+    0.12
+   ]
+  },
+  {
+   "name": "pelvis",
+   "parent": "root",
+   "head": [
+    0.0,
+    0.0,
+    0.65
+   ],
+   "tail": [
+    0.0,
+    0.0,
+    0.72
+   ]
+  },
+  {
+   "name": "spine",
+   "parent": "pelvis",
+   "head": [
+    0.0,
+    0.0,
+    0.72
+   ],
+   "tail": [
+    0.0,
+    0.0,
+    0.85
+   ]
+  },
+  {
+   "name": "chest",
+   "parent": "spine",
+   "head": [
+    0.0,
+    0.0,
+    0.85
+   ],
+   "tail": [
+    0.0,
+    0.0,
+    1.07
+   ]
+  },
+  {
+   "name": "neck",
+   "parent": "chest",
+   "head": [
+    0.0,
+    0.0,
+    1.07
+   ],
+   "tail": [
+    0.0,
+    0.0,
+    1.12
+   ]
+  },
+  {
+   "name": "head",
+   "parent": "neck",
+   "head": [
+    0.0,
+    0.0,
+    1.12
+   ],
+   "tail": [
+    0.0,
+    0.0,
+    1.4915
+   ]
+  },
+  {
+   "name": "eye_L",
+   "parent": "head",
+   "head": [
+    0.0774,
+    -0.2057,
+    1.3066
+   ],
+   "tail": [
+    0.0774,
+    -0.2457,
+    1.3066
+   ]
+  },
+  {
+   "name": "eye_R",
+   "parent": "head",
+   "head": [
+    -0.0774,
+    -0.2057,
+    1.3066
+   ],
+   "tail": [
+    -0.0774,
+    -0.2457,
+    1.3066
+   ]
+  },
+  {
+   "name": "clavicle_L",
+   "parent": "chest",
+   "head": [
+    0.0742,
+    0.0,
+    0.995
+   ],
+   "tail": [
+    0.239,
+    0.0,
+    0.995
+   ]
+  },
+  {
+   "name": "upperarm_L",
+   "parent": "clavicle_L",
+   "head": [
+    0.239,
+    0.0,
+    0.995
+   ],
+   "tail": [
+    0.239,
+    0.0,
+    0.795
+   ]
+  },
+  {
+   "name": "forearm_L",
+   "parent": "upperarm_L",
+   "head": [
+    0.239,
+    0.0,
+    0.795
+   ],
+   "tail": [
+    0.239,
+    0.0,
+    0.595
+   ]
+  },
+  {
+   "name": "hand_L",
+   "parent": "forearm_L",
+   "head": [
+    0.239,
+    0.0,
+    0.595
+   ],
+   "tail": [
+    0.239,
+    0.0,
+    0.525
+   ]
+  },
+  {
+   "name": "finger_thumb_1_L",
+   "parent": "hand_L",
+   "head": [
+    0.213,
+    -0.062,
+    0.55
+   ],
+   "tail": [
+    0.2129,
+    -0.0624,
+    0.516
+   ]
+  },
+  {
+   "name": "finger_thumb_2_L",
+   "parent": "finger_thumb_1_L",
+   "head": [
+    0.2129,
+    -0.0624,
+    0.516
+   ],
+   "tail": [
+    0.2127,
+    -0.0628,
+    0.486
+   ]
+  },
+  {
+   "name": "finger_index_1_L",
+   "parent": "hand_L",
+   "head": [
+    0.239,
+    -0.034,
+    0.503
+   ],
+   "tail": [
+    0.239,
+    -0.034,
+    0.463
+   ]
+  },
+  {
+   "name": "finger_index_2_L",
+   "parent": "finger_index_1_L",
+   "head": [
+    0.239,
+    -0.034,
+    0.463
+   ],
+   "tail": [
+    0.239,
+    -0.034,
+    0.429
+   ]
+  },
+  {
+   "name": "finger_middle_1_L",
+   "parent": "hand_L",
+   "head": [
+    0.239,
+    0.0,
+    0.503
+   ],
+   "tail": [
+    0.239,
+    0.0,
+    0.463
+   ]
+  },
+  {
+   "name": "finger_middle_2_L",
+   "parent": "finger_middle_1_L",
+   "head": [
+    0.239,
+    0.0,
+    0.463
+   ],
+   "tail": [
+    0.239,
+    0.0,
+    0.429
+   ]
+  },
+  {
+   "name": "finger_ring_1_L",
+   "parent": "hand_L",
+   "head": [
+    0.239,
+    0.034,
+    0.503
+   ],
+   "tail": [
+    0.239,
+    0.034,
+    0.463
+   ]
+  },
+  {
+   "name": "finger_ring_2_L",
+   "parent": "finger_ring_1_L",
+   "head": [
+    0.239,
+    0.034,
+    0.463
+   ],
+   "tail": [
+    0.239,
+    0.034,
+    0.429
+   ]
+  },
+  {
+   "name": "clavicle_R",
+   "parent": "chest",
+   "head": [
+    -0.0742,
+    0.0,
+    0.995
+   ],
+   "tail": [
+    -0.239,
+    0.0,
+    0.995
+   ]
+  },
+  {
+   "name": "upperarm_R",
+   "parent": "clavicle_R",
+   "head": [
+    -0.239,
+    0.0,
+    0.995
+   ],
+   "tail": [
+    -0.239,
+    0.0,
+    0.795
+   ]
+  },
+  {
+   "name": "forearm_R",
+   "parent": "upperarm_R",
+   "head": [
+    -0.239,
+    0.0,
+    0.795
+   ],
+   "tail": [
+    -0.239,
+    0.0,
+    0.595
+   ]
+  },
+  {
+   "name": "hand_R",
+   "parent": "forearm_R",
+   "head": [
+    -0.239,
+    0.0,
+    0.595
+   ],
+   "tail": [
+    -0.239,
+    0.0,
+    0.525
+   ]
+  },
+  {
+   "name": "finger_thumb_1_R",
+   "parent": "hand_R",
+   "head": [
+    -0.213,
+    -0.062,
+    0.55
+   ],
+   "tail": [
+    -0.2129,
+    -0.0624,
+    0.516
+   ]
+  },
+  {
+   "name": "finger_thumb_2_R",
+   "parent": "finger_thumb_1_R",
+   "head": [
+    -0.2129,
+    -0.0624,
+    0.516
+   ],
+   "tail": [
+    -0.2127,
+    -0.0628,
+    0.486
+   ]
+  },
+  {
+   "name": "finger_index_1_R",
+   "parent": "hand_R",
+   "head": [
+    -0.239,
+    -0.034,
+    0.503
+   ],
+   "tail": [
+    -0.239,
+    -0.034,
+    0.463
+   ]
+  },
+  {
+   "name": "finger_index_2_R",
+   "parent": "finger_index_1_R",
+   "head": [
+    -0.239,
+    -0.034,
+    0.463
+   ],
+   "tail": [
+    -0.239,
+    -0.034,
+    0.429
+   ]
+  },
+  {
+   "name": "finger_middle_1_R",
+   "parent": "hand_R",
+   "head": [
+    -0.239,
+    0.0,
+    0.503
+   ],
+   "tail": [
+    -0.239,
+    0.0,
+    0.463
+   ]
+  },
+  {
+   "name": "finger_middle_2_R",
+   "parent": "finger_middle_1_R",
+   "head": [
+    -0.239,
+    0.0,
+    0.463
+   ],
+   "tail": [
+    -0.239,
+    0.0,
+    0.429
+   ]
+  },
+  {
+   "name": "finger_ring_1_R",
+   "parent": "hand_R",
+   "head": [
+    -0.239,
+    0.034,
+    0.503
+   ],
+   "tail": [
+    -0.239,
+    0.034,
+    0.463
+   ]
+  },
+  {
+   "name": "finger_ring_2_R",
+   "parent": "finger_ring_1_R",
+   "head": [
+    -0.239,
+    0.034,
+    0.463
+   ],
+   "tail": [
+    -0.239,
+    0.034,
+    0.429
+   ]
+  },
+  {
+   "name": "thigh_L",
+   "parent": "pelvis",
+   "head": [
+    0.09,
+    0.0,
+    0.615
+   ],
+   "tail": [
+    0.09,
+    0.0,
+    0.35
+   ]
+  },
+  {
+   "name": "shin_L",
+   "parent": "thigh_L",
+   "head": [
+    0.09,
+    0.0,
+    0.35
+   ],
+   "tail": [
+    0.09,
+    0.0,
+    0.085
+   ]
+  },
+  {
+   "name": "foot_L",
+   "parent": "shin_L",
+   "head": [
+    0.09,
+    0.0,
+    0.085
+   ],
+   "tail": [
+    0.09,
+    -0.1,
+    0.045
+   ]
+  },
+  {
+   "name": "toe_L",
+   "parent": "foot_L",
+   "head": [
+    0.09,
+    -0.1,
+    0.045
+   ],
+   "tail": [
+    0.09,
+    -0.17,
+    0.03
+   ]
+  },
+  {
+   "name": "thigh_R",
+   "parent": "pelvis",
+   "head": [
+    -0.09,
+    0.0,
+    0.615
+   ],
+   "tail": [
+    -0.09,
+    0.0,
+    0.35
+   ]
+  },
+  {
+   "name": "shin_R",
+   "parent": "thigh_R",
+   "head": [
+    -0.09,
+    0.0,
+    0.35
+   ],
+   "tail": [
+    -0.09,
+    0.0,
+    0.085
+   ]
+  },
+  {
+   "name": "foot_R",
+   "parent": "shin_R",
+   "head": [
+    -0.09,
+    0.0,
+    0.085
+   ],
+   "tail": [
+    -0.09,
+    -0.1,
+    0.045
+   ]
+  },
+  {
+   "name": "toe_R",
+   "parent": "foot_R",
+   "head": [
+    -0.09,
+    -0.1,
+    0.045
+   ],
+   "tail": [
+    -0.09,
+    -0.17,
+    0.03
+   ]
+  }
+ ],
+ "meshes": {
+  "Body_Accent": [],
+  "Body_Dark": [],
+  "Body_Shell": [],
+  "Body_Shell2": [],
+  "Brow_L": [
+   "browUp",
+   "browDown",
+   "browInnerUp",
+   "browInnerDown"
+  ],
+  "Brow_R": [
+   "browUp",
+   "browDown",
+   "browInnerUp",
+   "browInnerDown"
+  ],
+  "Eye_L": [
+   "eyeBlink",
+   "eyeSquint",
+   "eyeWide",
+   "eyeHappy",
+   "eyeSad",
+   "eyeAngry",
+   "eyeSurprised",
+   "eyeCurious"
+  ],
+  "Eye_R": [
+   "eyeBlink",
+   "eyeSquint",
+   "eyeWide",
+   "eyeHappy",
+   "eyeSad",
+   "eyeAngry",
+   "eyeSurprised",
+   "eyeCurious"
+  ],
+  "Glow": [],
+  "Mouth": [
+   "mouthOpen",
+   "viseme_sil",
+   "viseme_PP",
+   "viseme_FF",
+   "viseme_TH",
+   "viseme_DD",
+   "viseme_kk",
+   "viseme_CH",
+   "viseme_SS",
+   "viseme_nn",
+   "viseme_RR",
+   "viseme_aa",
+   "viseme_E",
+   "viseme_I",
+   "viseme_O",
+   "viseme_U",
+   "mouthSmile",
+   "mouthFrown",
+   "mouthSurprise"
+  ],
+  "Visor": []
+ },
+ "materials": [
+  "Mat_Accent",
+  "Mat_Dark",
+  "Mat_Face",
+  "Mat_Glow",
+  "Mat_Shell",
+  "Mat_Shell2",
+  "Mat_Visor"
+ ],
+ "layout": {
+  "ankle": 0.085,
+  "knee": 0.35,
+  "hip": 0.615,
+  "pel": 0.65,
+  "spine": 0.72,
+  "chest": 0.85,
+  "neck": 1.07,
+  "head_pivot": 1.12,
+  "head_c": 1.298,
+  "sh_z": 0.995,
+  "sh_x": 0.239,
+  "elbow": 0.795,
+  "wrist": 0.595,
+  "hip_x": 0.09
+ },
+ "height_m": 1.569
+}
