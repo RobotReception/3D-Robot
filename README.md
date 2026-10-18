@@ -20,7 +20,7 @@ a **Control Studio** to test everything.
 npm install
 npm run dev            # Control Studio at http://localhost:5173
 npm test               # 87 unit/integration tests (headless, real GLB models)
-npm run test:e2e       # 25 browser tests (Chromium + WebGL): Studio, audio lip-sync, WebSocket, R3F
+npm run test:e2e       # 26 browser tests (Chromium + WebGL): Studio, audio lip-sync, WebSocket, R3F
 npm run build          # type-check + production build (dist/)
 ```
 

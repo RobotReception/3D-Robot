@@ -289,6 +289,7 @@ await check("developer panel shows live FPS, draw calls and engine CPU time", as
 
 await check("lip-sync from real audio: vowels.wav drives the matching mouth shapes in sync with the audio clock", async () => {
   await page.click('[data-testid="reset"]');
+  await page.evaluate(() => window.studio.selectBone(null)); // hide the joint-pick marker in the screenshot
   await page.click('[data-testid="tab-Audio"]');
   // sample the mouth morphs at high rate while the audio plays (render loop stopped, own fast loop).
   // The sampler starts first and waits for playback so no part of the audio is missed.
@@ -500,6 +501,8 @@ console.log("\nMobile layout (390x844, touch)");
     const o = await m.page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, canvasH: document.querySelector("canvas").clientHeight }));
     ok(o.sw <= o.cw + 1, "horizontal overflow " + JSON.stringify(o));
     ok(o.canvasH > 300, "canvas too small");
+    const ov = await m.page.evaluate(() => { const t = document.querySelector(".toolbar").getBoundingClientRect(); const v = document.querySelector('[data-testid="viewport"]').getBoundingClientRect(); return { toolbarBottom: t.bottom, viewportTop: v.top }; });
+    ok(ov.toolbarBottom <= ov.viewportTop + 1, "toolbar overlaps the 3D view on phones: " + JSON.stringify(ov));
     await m.page.click('[data-testid="tab-Audio"]');
     await m.page.screenshot({ path: path.join(shotDir, "studio-mobile.png") });
     return o;
