@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Robot Avatar - minimal embed</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; background: #10131a; }
+      #stage { width: 100vw; height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <script type="module">
+      import { RobotAvatar, RobotViewer } from "/src/index.ts";
+
+      const viewer = new RobotViewer(document.getElementById("stage"), { quality: "high" });
+      const robot = await RobotAvatar.load("/models/robot_premium.glb");
+      viewer.add(robot);
+      viewer.start();
+      window.robot = robot;
+      window.viewer = viewer;
+
+      robot.playAnimation("greeting");
+      robot.speak({ text: "Hello! I am your assistant.", lipSync: true, emotion: "friendly" });
+    </script>
+  </body>
+</html>
