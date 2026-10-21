@@ -1,8 +1,9 @@
 // Generates the synthetic demo audio in public/audio (formant synthesis, CC0 - no recorded speech).
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { encodeWav, synthesize, type Segment } from "../tests/helpers/synth";
 
-const dir = new URL("../public/audio/", import.meta.url).pathname;
+const dir = fileURLToPath(new URL("../public/audio/", import.meta.url));
 fs.mkdirSync(dir, { recursive: true });
 
 // 1) vowel sweep with pauses and an "s": exercises the audio-driven (text-free) path
