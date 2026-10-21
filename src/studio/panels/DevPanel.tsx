@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { connectWebSocket } from "../../engine/bridge";
 import { executeMessage } from "../../engine/commands";
 import { useCoreChange, useStudio, useTick } from "../StudioContext";
@@ -26,7 +26,12 @@ export function DevPanel() {
   const [reply, setReply] = useState("");
   const [ws, setWs] = useState("ws://localhost:8787");
   const [wsState, setWsState] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const sock = useRef<{ close(): void } | null>(null);
+  useEffect(() => {
+    setWsState("");
+    return () => { sock.current?.close(); sock.current = null; };
+  }, [r]);
   const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize;
 
   const send = async () => {
@@ -75,10 +80,16 @@ export function DevPanel() {
           {sock.current ? (
             <Chip tone="danger" onClick={() => { sock.current?.close(); sock.current = null; setWsState(""); }}>{t("Disconnect")}</Chip>
           ) : (
-            <Chip onClick={() => { sock.current = connectWebSocket(r, ws, { onStatus: setWsState }); setWsState("…"); }}>{t("Connect")}</Chip>
+            <Chip onClick={() => {
+              try {
+                sock.current = connectWebSocket(r, ws, { apiKey, onStatus: setWsState });
+                setWsState("…");
+              } catch (error) { setWsState(String(error)); }
+            }}>{t("Connect")}</Chip>
           )}
           <span className="tag">{wsState}</span>
         </Row>
+        <input type="password" aria-label="WebSocket API key" placeholder="API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" />
       </Section>
 
       <Section title={t("Robot status")}>

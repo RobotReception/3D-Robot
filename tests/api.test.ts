@@ -361,7 +361,7 @@ describe("JSON commands", () => {
     const r = await makeRobot();
     const sent: string[] = [];
     let incoming: (d: string) => void = () => undefined;
-    const transport: BridgeTransport = { send: (d) => sent.push(d), onMessage: (cb) => (incoming = cb) };
+    const transport: BridgeTransport = { send: (d) => sent.push(d), onMessage: (cb) => { incoming = cb; } };
     const detach = attachBridge(r, transport);
     incoming(JSON.stringify({ id: "a1", cmd: "setState", state: "thinking" }));
     await flush();
