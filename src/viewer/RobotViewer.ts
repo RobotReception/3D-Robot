@@ -28,9 +28,9 @@ export function webglSupported(): boolean {
 }
 
 const QUALITY: Record<QualityLevel, { pixelRatio: number; shadows: boolean; shadowMap: number; envIntensity: number; toneMapping: THREE.ToneMapping; bloom: boolean }> = {
-  low: { pixelRatio: 1, shadows: false, shadowMap: 512, envIntensity: 0.7, toneMapping: THREE.LinearToneMapping, bloom: false },
-  medium: { pixelRatio: 1.5, shadows: true, shadowMap: 1024, envIntensity: 0.9, toneMapping: THREE.ACESFilmicToneMapping, bloom: false },
-  high: { pixelRatio: 2, shadows: true, shadowMap: 2048, envIntensity: 1, toneMapping: THREE.ACESFilmicToneMapping, bloom: true },
+  low: { pixelRatio: 1, shadows: false, shadowMap: 512, envIntensity: 0.65, toneMapping: THREE.ACESFilmicToneMapping, bloom: false },
+  medium: { pixelRatio: 1.5, shadows: true, shadowMap: 1024, envIntensity: 0.65, toneMapping: THREE.ACESFilmicToneMapping, bloom: false },
+  high: { pixelRatio: 2, shadows: true, shadowMap: 2048, envIntensity: 0.65, toneMapping: THREE.ACESFilmicToneMapping, bloom: false },
 };
 const BACKGROUNDS: Record<BackgroundPreset, { color: string | null; floor: string }> = {
   studio: { color: "#10131a", floor: "#1b2030" },
@@ -69,9 +69,9 @@ export class RobotViewer {
   readonly controls: OrbitControls;
   readonly canvas: HTMLCanvasElement;
   private avatars = new Set<RobotAvatar>();
-  private key = new THREE.DirectionalLight(0xffffff, 2.4);
-  private fill = new THREE.DirectionalLight(0x9db8ff, 0.7);
-  private rim = new THREE.DirectionalLight(0xffd9b0, 1.2);
+  private key = new THREE.DirectionalLight(0xfff5e9, 1.8);
+  private fill = new THREE.DirectionalLight(0xe2e9ef, 0.65);
+  private rim = new THREE.DirectionalLight(0xf0e9df, 0.55);
   private floor: THREE.Mesh;
   private ring: THREE.Mesh;
   private grid: THREE.GridHelper;
@@ -82,7 +82,7 @@ export class RobotViewer {
   private darkMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   private stash = new Map<THREE.Object3D, THREE.Material | THREE.Material[]>();
   private bloomLayer = new THREE.Layers();
-  /** glow (bloom) on emissive parts: eyes, mouth, ring joints. On by default in "high". */
+  /** Optional selective glow. Disabled by default at every quality level. */
   bloom = false;
   private pmrem: THREE.PMREMGenerator;
   private raf = 0;
@@ -97,7 +97,7 @@ export class RobotViewer {
   quality: QualityLevel = "high";
   background: BackgroundPreset = "studio";
   /** current lighting values (read by the Studio sliders) */
-  light = { intensity: 2.4, angleDeg: 31, exposure: 1.05, grid: true };
+  light = { intensity: 1.8, angleDeg: 31, exposure: 0.95, grid: false };
   onFrame: ((dt: number) => void)[] = [];
   /** follow the robot with the orbit target (face/upper presets) */
   followTarget: (() => THREE.Vector3) | null = null;
@@ -143,7 +143,7 @@ export class RobotViewer {
     this.floor.receiveShadow = true;
     this.ring = new THREE.Mesh(
       new THREE.RingGeometry(0.62, 0.64, 96),
-      new THREE.MeshBasicMaterial({ color: 0x59d0ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: 0x819098, transparent: true, opacity: 0.16, side: THREE.DoubleSide }),
     );
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.position.y = 0.002;
@@ -193,7 +193,7 @@ export class RobotViewer {
         // glossy black faceplates: keep the strong highlight but avoid a grey wash from the whole environment map
         for (const x of mats) {
           const s = x as THREE.MeshStandardMaterial;
-          if (s.name === "Mat_Visor" && s.metalness < 0.5) s.envMapIntensity = 0.07;
+          if (s.name === "Mat_Visor" && s.metalness < 0.5) s.envMapIntensity = 0.12;
         }
         // emissive parts (eyes, mouth, brows, ring joints) take part in the selective bloom
         if (mats.some((x) => x.name === "Mat_Glow" || x.name === "Mat_Face")) o.layers.enable(1);

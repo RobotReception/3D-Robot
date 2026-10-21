@@ -9,19 +9,26 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const outDir = path.join(root, "tests/e2e/out");
-const shotDir = path.join(root, "docs/screenshots");
+const shotDir = path.join(outDir, "screenshots");
 fs.mkdirSync(outDir, { recursive: true });
 fs.mkdirSync(shotDir, { recursive: true });
 const PORT = 4173;
 const URL = `http://localhost:${PORT}/`;
-const CHROME = process.env.CHROME_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+const CHROME = process.env.CHROME_PATH || [
+  chromium.executablePath(),
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  "/usr/bin/chromium", "/usr/bin/google-chrome",
+].find((p) => fs.existsSync(p));
+if (!CHROME) throw new Error("Chromium not found. Run npx playwright-core install chromium or set CHROME_PATH.");
+const vite = path.join(root, "node_modules/vite/bin/vite.js");
 const GL_ARGS = ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"];
 
 if (!process.env.SKIP_BUILD) {
-  const b = spawnSync("npx", ["vite", "build"], { cwd: root, stdio: "inherit" });
+  const b = spawnSync(process.execPath, [vite, "build"], { cwd: root, stdio: "inherit" });
   if (b.status !== 0) process.exit(1);
 }
-const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], { cwd: root, stdio: "ignore" });
+const server = spawn(process.execPath, [vite, "preview", "--port", String(PORT), "--strictPort"], { cwd: root, stdio: "ignore" });
 const kill = () => server.kill("SIGTERM");
 process.on("exit", kill);
 for (let i = 0; i < 60; i++) {
@@ -425,9 +432,10 @@ await check("quality levels change the real render settings (pixel ratio, shadow
     q[level] = await page.evaluate(() => ({ pr: window.viewer.renderer.getPixelRatio(), shadows: window.viewer.renderer.shadowMap.enabled }));
   }
   ok(q.low.shadows === false && q.high.shadows === true && q.low.pr <= q.high.pr, JSON.stringify(q));
-  // selective bloom: on only at "high"; the stats then cover several passes
+  // Natural lighting stays consistent when quality changes; glow is opt-in.
   const b = await page.evaluate(() => ({ bloom: window.viewer.bloom, layers: [...window.robot.parts.meshes.values()].filter((m) => m.layers.isEnabled(1)).map((m) => m.name) }));
-  ok(b.bloom === true && b.layers.includes("Glow") && b.layers.includes("Mouth") && !b.layers.includes("Body_Shell"), "bloom not selective: " + JSON.stringify(b));
+  ok(b.bloom === false, "quality must not enable glow: " + JSON.stringify(b));
+  await page.evaluate(() => window.viewer.setBloom(true));
   await page.waitForTimeout(1500);
   const calls = await page.evaluate(() => window.viewer.stats.calls);
   ok(calls > 20, "stats should count all passes: " + calls);
@@ -505,7 +513,7 @@ await check("WebSocket bridge: a server drives the robot with JSON and receives 
 });
 
 await check("Remote HTTP API: POST a JSON motion + commands from outside, the browser robot performs them", async () => {
-  const srv = spawn("node", ["tools/remote_api_server.mjs"], { cwd: root, env: { ...process.env, PORT: "8788", API_KEY: "k" }, stdio: "ignore" });
+  const srv = spawn(process.execPath, ["tools/remote_api_server.mjs"], { cwd: root, env: { ...process.env, PORT: "8788", API_KEY: "k" }, stdio: "ignore" });
   const H = { authorization: "Bearer k", "content-type": "application/json" };
   const api = (p, init = {}) => fetch(`http://localhost:8788${p}`, { ...init, headers: { ...H, ...(init.headers || {}) } });
   try {
@@ -513,6 +521,7 @@ await check("Remote HTTP API: POST a JSON motion + commands from outside, the br
     ok((await fetch("http://localhost:8788/v1/health")).status === 401, "API key not enforced");
     await page.click('[data-testid="tab-Developer"]');
     await page.locator('input[aria-label="WebSocket URL"]').fill("ws://localhost:8788");
+    await page.locator('input[aria-label="WebSocket API key"]').fill("k");
     await page.click('button:has-text("Connect")');
     const t0 = Date.now();
     while ((await (await api("/v1/health")).json()).robots < 1 && Date.now() - t0 < 10000) await new Promise((r) => setTimeout(r, 100));

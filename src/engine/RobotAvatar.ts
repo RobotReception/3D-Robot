@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyNaturalAppearance } from "./appearance";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { AnimationController, type PlayOptions, type PlayResult } from "./AnimationController";
 import { AudioController, speakWithBrowserTTS, speechSynthesisAvailable, type LoadedAudio, type PlayingAudio, type PcmStream } from "./AudioController";
@@ -92,7 +93,10 @@ export interface StreamSpeechHandle {
 
 export interface RobotAvatarOptions {
   clips?: typeof BUILTIN_CLIPS;
+  /** Disable automatic eye-blink animation; manual `blink()` calls still work. */
   autoBlink?: boolean;
+  /** When false, the eye glow stays steady and does not pulse/flicker. */
+  eyeGlow?: boolean;
   idleGaze?: boolean;
   /** overrides the model's default resting emotion */
   defaultEmotion?: EmotionName;
@@ -132,6 +136,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   audio: AudioController | null = null;
 
   time = 0;
+  /** Disable the eye glow pulse/flicker while leaving the material colors intact. */
+  eyeGlow = false;
   /** emotion used when idle / after reset (model default, e.g. "friendly" for the mascot) */
   defaultEmotion: EmotionName = "neutral";
   private reach: Record<Side, Reach> = {
@@ -147,6 +153,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   constructor(parts: RobotModelParts, opts: RobotAvatarOptions = {}) {
     super();
     this.parts = parts;
+    applyNaturalAppearance(parts.materials.values());
     this.model = parts.scene;
     this.root.name = "RobotAvatar";
     this.root.add(this.model);
@@ -163,7 +170,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
       Eye_L: m.get("Eye_L")!, Eye_R: m.get("Eye_R")!, Mouth: m.get("Mouth")!, Brow_L: m.get("Brow_L")!, Brow_R: m.get("Brow_R")!,
     });
     if (opts.rng) this.face.rng = opts.rng;
-    this.face.autoBlink = opts.autoBlink ?? true;
+    this.eyeGlow = opts.eyeGlow ?? false;
+    this.face.autoBlink = opts.autoBlink ?? false;
     this.lipsync = new LipSyncController(this.face);
     this.gaze = new GazeController(this.joints);
     this.gaze.idleWander = opts.idleGaze ?? true;
@@ -296,6 +304,16 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
 
   private updateGlow(dt: number) {
+    for (const [mat, base] of this.glowBase) {
+      const material = mat as THREE.MeshStandardMaterial;
+      if (!this.eyeGlow) {
+        material.emissive.set(base.color);
+        material.emissiveIntensity = 0;
+        continue;
+      }
+      material.emissiveIntensity = base.intensity * (mat.name === "Mat_Glow" ? 1 : 1);
+    }
+    if (!this.eyeGlow) return;
     this.glowBoost += (0 - this.glowBoost) * (1 - Math.exp(-dt / 0.3));
     const pulse = 1 + 0.35 * this.lipsync.energy + this.glowBoost;
     for (const [mat, base] of this.glowBase) {
@@ -414,7 +432,13 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
   setGlow(color?: THREE.ColorRepresentation, boost = 0) {
     for (const [mat, base] of this.glowBase) {
-      if (mat.name === "Mat_Glow") (mat as THREE.MeshStandardMaterial).emissive.set(color ?? base.color);
+      const material = mat as THREE.MeshStandardMaterial;
+      if (!this.eyeGlow) {
+        material.emissive.set(base.color);
+        material.emissiveIntensity = 0;
+        continue;
+      }
+      if (mat.name === "Mat_Glow") material.emissive.set(color ?? base.color);
     }
     this.glowBoost = boost;
   }
