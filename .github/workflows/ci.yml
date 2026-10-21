@@ -11,5 +11,12 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-  # Browser E2E needs Chromium: run locally with `npm run test:e2e` (CHROME_PATH=/path/to/chrome) or add
-  # a job that installs Playwright's browser and exports CHROME_PATH.
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          SKIP_BUILD: "1"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: tests/e2e/out

@@ -1,5 +1,9 @@
 # Testing & acceptance evidence
 
+Run `npm test` for engine, bridge lifecycle, concurrent Studio loading, and remote HTTP/WebSocket security regression tests. Run `npm run build` for strict TypeScript checks and production output.
+
+For browser checks, run `npx playwright-core install chromium` once, then `npm run test:e2e`. The runner detects installed Chromium, Chrome or Edge on Windows; set `CHROME_PATH` to override. Browser screenshots and the JSON report are written to `tests/e2e/out/`, leaving documentation images untouched. CI installs Chromium and runs this suite after building.
+
 ```bash
 npm test               # 102 tests, ~8 s: headless engine tests on the real shipped GLBs (all three styles)
 npm run test:e2e       # 28 browser tests: builds, serves dist/, drives the Studio in Chromium (WebGL)
