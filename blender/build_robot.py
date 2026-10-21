@@ -51,8 +51,8 @@ STYLES = {
     ),
     # Realistic humanoid receptionist: human proportions (1.76 m), panelled white shell, navy uniform, glowing ring joints.
     "concierge": dict(
-        kind="humanoid", head_r=0.13, head_sq=(0.88, 0.96, 1.12), e_head=0.85, torso=(0.19, 0.115, 0.17),
-        e_box=0.75, thigh=0.40, shin=0.40, limb_r=0.045, upper=0.30, fore=0.27, chest_h=0.30, hip_x=0.10, foot=1.35,
+        kind="humanoid", head_r=0.13, head_sq=(0.88, 0.96, 1.12), e_head=0.85, torso=(0.195, 0.12, 0.17),
+        e_box=0.75, thigh=0.405, shin=0.39, limb_r=0.045, upper=0.30, fore=0.27, chest_h=0.32, hip_x=0.10, foot=1.22,
         shell=(0.97, 0.97, 0.98), shell2=(0.80, 0.82, 0.86), dark=(0.015, 0.016, 0.02), accent=(0.78, 0.8, 0.84),
         uniform=(0.035, 0.06, 0.15), glow=(0.0, 0.32, 1.0), metal=0.0, rough=0.2, coat=1.0, eye=(0.058, 0.066), eye_p=2.1,
         mouth_w=0.04,
@@ -503,8 +503,13 @@ def humanoid_parts(P, S, L, bones, bone_index):
         elb, wr = L["elbow"], L["wrist"]
         # -- shoulder
         sh.capsule((sx * tx * 0.3, 0, shz - 0.01), (shx, 0, shz - 0.01), r * 0.95, r, f"clavicle_{side}")
-        dk.ellipsoid((shx, 0, shz - 0.006), (0.052, 0.052, 0.052), f"upperarm_{side}", nu=24, nv=14)
-        sh.ellipsoid((shx + sx * 0.004, 0, shz + 0.012), (0.062, 0.06, 0.066), f"upperarm_{side}", e1=0.8, e2=0.8, nu=32, nv=18)
+        dk.ellipsoid((shx, 0, shz - 0.006), (0.043, 0.043, 0.043), f"upperarm_{side}", nu=24, nv=14)
+        # An elongated, tilted shoulder shell follows the arm line and blends into the yoke,
+        # avoiding the detached spherical-pauldron look while preserving the shoulder joint.
+        sh.ellipsoid((shx + sx * 0.004, 0, shz + 0.006), (0.05, 0.05, 0.056), f"upperarm_{side}",
+                     e1=0.76, e2=0.82, axis=(sx * 0.2, 0, 1), nu=40, nv=22)
+        sh.capsule((sx * tx * 0.58, -0.012, shz + 0.035), (shx, -0.012, shz - 0.105),
+                   0.047, 0.038, f"upperarm_{side}", e1=0.72, nu=32, nv=18)  # shoulder-to-arm armour sweep
         ring((shx + sx * 0.058, 0, shz + 0.004), 0.026, (sx, 0, 0), f"upperarm_{side}")
         # -- upper arm
         for zz in (shz - 0.10, elb + 0.07):
@@ -512,8 +517,8 @@ def humanoid_parts(P, S, L, bones, bone_index):
         sh.capsule((shx, 0, shz - 0.055), (shx, 0, elb + 0.03), 0.047, 0.037, f"upperarm_{side}", nu=24, nv=14)
         strip((shx + sx * 0.040, 0.004, (shz + elb) / 2 - 0.01), (0.0045, 0.011, 0.075), f"upperarm_{side}")
         # -- elbow
-        dk.ellipsoid((shx, 0, elb), (0.042, 0.042, 0.042), f"forearm_{side}", nu=22, nv=12)
-        ring((shx + sx * 0.039, 0, elb), 0.02, (sx, 0, 0), f"forearm_{side}", r=0.004)
+        dk.ellipsoid((shx, 0, elb), (0.034, 0.034, 0.034), f"forearm_{side}", nu=22, nv=12)
+        ring((shx + sx * 0.032, 0, elb), 0.016, (sx, 0, 0), f"forearm_{side}", r=0.003)
         # -- forearm
         for zz in (elb - 0.09, wr + 0.11):
             dk.torus((shx, 0, zz), 0.0345, 0.002, f"forearm_{side}", nu=28, nv=5)
@@ -541,16 +546,17 @@ def humanoid_parts(P, S, L, bones, bone_index):
         # -- leg
         hx = L["hip_x"] * sx
         hip, knee, ank = L["hip"], L["knee"], L["ankle"]
-        dk.ellipsoid((hx, 0, hip), (0.068, 0.068, 0.068), f"thigh_{side}", nu=26, nv=14)
-        ring((hx + sx * 0.064, 0, hip - 0.004), 0.03, (sx, 0, 0), f"thigh_{side}", r=0.005)
+        dk.ellipsoid((hx, 0, hip), (0.056, 0.056, 0.056), f"thigh_{side}", nu=26, nv=14)
+        ring((hx + sx * 0.052, 0, hip - 0.004), 0.024, (sx, 0, 0), f"thigh_{side}", r=0.004)
         for zz in (hip - 0.13, knee + 0.11):
             dk.torus((hx, 0, zz), 0.064, 0.0025, f"thigh_{side}", nu=32, nv=5)
-        sh.capsule((hx, 0, hip - 0.04), (hx, 0, knee + 0.04), 0.074, 0.055, f"thigh_{side}", nu=28, nv=16)
-        sh.ellipsoid((hx + sx * 0.012, 0, hip + 0.015), (0.074, 0.072, 0.06), f"thigh_{side}", e1=0.8, e2=0.8, nu=28, nv=14)  # hip guard
+        sh.capsule((hx, 0, hip - 0.04), (hx, 0, knee + 0.04), 0.076, 0.057, f"thigh_{side}", nu=32, nv=18)
+        sh.ellipsoid((hx + sx * 0.012, 0, hip + 0.015), (0.073, 0.068, 0.066), f"thigh_{side}", e1=0.76, e2=0.82,
+                     axis=(sx * 0.18, 0, 1), nu=32, nv=18)  # integrated hip guard
         strip((hx + sx * 0.067, 0.004, (hip + knee) / 2 + 0.02), (0.0045, 0.011, 0.11), f"thigh_{side}")
-        dk.ellipsoid((hx, 0, knee), (0.056, 0.056, 0.056), f"shin_{side}", nu=24, nv=12)
-        ring((hx + sx * 0.052, 0, knee), 0.027, (sx, 0, 0), f"shin_{side}", r=0.0048)
-        sh.ellipsoid((hx, -0.046, knee + 0.012), (0.045, 0.034, 0.058), f"shin_{side}", e1=0.8, e2=0.8, nu=28, nv=14)            # kneecap
+        dk.ellipsoid((hx, 0, knee), (0.046, 0.046, 0.046), f"shin_{side}", nu=24, nv=12)
+        ring((hx + sx * 0.043, 0, knee), 0.021, (sx, 0, 0), f"shin_{side}", r=0.0035)
+        sh.ellipsoid((hx, -0.044, knee + 0.012), (0.041, 0.03, 0.052), f"shin_{side}", e1=0.76, e2=0.82, nu=32, nv=18)  # kneecap
         for zz in (knee - 0.09, ank + 0.14):
             dk.torus((hx, 0, zz), 0.047, 0.0022, f"shin_{side}", nu=28, nv=5)
         sh.capsule((hx, 0, knee - 0.045), (hx, 0, ank + 0.055), 0.054, 0.039, f"shin_{side}", nu=24, nv=14)
