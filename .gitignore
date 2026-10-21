@@ -3,5 +3,8 @@ dist
 *.log
 .DS_Store
 tests/e2e/out
+coverage
+.venv/
+old/
 __pycache__
 *.blend1
