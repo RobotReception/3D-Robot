@@ -29,6 +29,8 @@ export class StudioCore {
   private marker!: THREE.Mesh;
   private cursorTarget = new THREE.Vector3(0, 1.4, 2);
   private cleanup: (() => void)[] = [];
+  private disposed = false;
+  private loadVersion = 0;
   private raycaster = new THREE.Raycaster();
   listeners = new Set<() => void>();
   onBoneSelected?: (bone: string) => void;
@@ -44,6 +46,7 @@ export class StudioCore {
     this.viewer.scene.add(this.marker);
     this.viewer.onFrame.push(() => this.afterFrame());
     await this.loadStyle(this.style);
+    if (this.disposed) return;
     this.viewer.setCameraPreset("full", false);
     this.viewer.start();
     this.bindPointer();
@@ -53,10 +56,25 @@ export class StudioCore {
   }
 
   async loadStyle(style: Style) {
+    if (this.disposed) return;
+    const version = ++this.loadVersion;
+    let robot: RobotAvatar;
+    try {
+      robot = await RobotAvatar.load(modelUrl(style), { autoBlink: false, eyeGlow: false });
+    } catch (error) {
+      if (this.disposed || version !== this.loadVersion) return;
+      if (!this.robot) throw error;
+      this.pushLog("error", { message: String(error) });
+      this.emitChange();
+      return;
+    }
+    if (this.disposed || version !== this.loadVersion) {
+      robot.dispose();
+      return;
+    }
     const prev = this.robot;
     const pos = prev?.root.position.clone();
     const yaw = prev?.root.rotation.y ?? 0;
-    const robot = await RobotAvatar.load(modelUrl(style));
     if (prev) {
       this.viewer.remove(prev);
       prev.dispose();
@@ -135,7 +153,7 @@ export class StudioCore {
   }
 
   private pickable() {
-    return [...this.robot.parts.meshes.values()].filter((m) => !/^(Eye|Mouth|Brow)/.test(m.name) || true);
+    return [...this.robot.parts.meshes.values()];
   }
 
   private bindPointer() {
@@ -208,7 +226,14 @@ export class StudioCore {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    ++this.loadVersion;
     this.cleanup.forEach((f) => f());
+    this.cleanup = [];
+    this.listeners.clear();
+    this.marker?.geometry.dispose();
+    (this.marker?.material as THREE.Material | undefined)?.dispose();
     this.viewer?.dispose();
   }
 }
