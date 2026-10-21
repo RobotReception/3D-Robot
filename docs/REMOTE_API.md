@@ -13,7 +13,8 @@ The robot runs **in a browser page** (three.js, WebGL). Your backend or AI agent
 ```bash
 API_KEY=secret PORT=8787 npm run api:server
 # on the robot page: Studio → Developer → WebSocket → ws://localhost:8787 → Connect
-#   or in your own app:  connectWebSocket(robot, "ws://localhost:8787")
+#   Enter secret in the Studio's WebSocket API key field.
+#   or: connectWebSocket(robot, "ws://localhost:8787", { apiKey: "secret" })
 ```
 
 ## Endpoints
@@ -28,7 +29,11 @@ API_KEY=secret PORT=8787 npm run api:server
 | `POST /v1/motions?play=1&overwrite=1` | motion JSON | `201 {ok,result:{name,warnings,played}}` or `400 {ok:false,error:"invalid motion: keys[1].armR.elbow: …"}` |
 | `GET /v1/schema/motion` | – | JSON Schema of a motion (give it to the LLM) |
 
-Query options: `?robot=<index>` (several robot pages), `?timeout=<ms>` (default 30 000; commands with `"wait":true` such as `walkTo`/`speak` reply when finished).
+Query options: `?robot=<index>` (non-negative integer), `?timeout=<ms>` (1–120000, default 30000; commands with `"wait":true` reply when finished).
+
+HTTP bodies and WebSocket messages are limited to 1 MiB; batches to 100 commands and outstanding requests to 1024. Oversized HTTP bodies return 413. Batch `ok` is false if any command fails. Requests use unique internal IDs and only accept replies from the selected robot; the original client ID is preserved. Robot disconnection settles its pending requests immediately.
+
+When `API_KEY` is set, WebSocket upgrades require authentication too. Browser clients use `connectWebSocket(..., { apiKey })`, which sends a `robot-auth.<base64url-encoded UTF-8 key>` subprotocol. Non-browser clients may instead send the same Bearer header as HTTP. Use TLS (`wss://`) outside local development; encoding the key does not encrypt it. The Studio keeps the key only in component memory.
 Errors: `401` bad/missing `Authorization: Bearer <API_KEY>`, `503 no robot connected`, `400` invalid command/motion (message says why), `404`.
 
 ## Examples
