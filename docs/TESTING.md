@@ -5,13 +5,13 @@ Run `npm test` for engine, bridge lifecycle, concurrent Studio loading, and remo
 For browser checks, run `npx playwright-core install chromium` once, then `npm run test:e2e`. The runner detects installed Chromium, Chrome or Edge on Windows; set `CHROME_PATH` to override. Browser screenshots and the JSON report are written to `tests/e2e/out/`, leaving documentation images untouched. CI installs Chromium and runs this suite after building.
 
 ```bash
-npm test               # 102 tests, ~8 s: headless engine tests on the real shipped GLBs (all three styles)
+npm test               # 111 tests, ~4 s: headless engine tests on the real shipped GLBs (all three styles)
 npm run test:e2e       # 28 browser tests: builds, serves dist/, drives the Studio in Chromium (WebGL)
                        # CHROME_PATH=/path/to/chrome to choose the browser; SKIP_BUILD=1 to reuse dist/
 npm run typecheck && npm run build
 ```
 
-Results of the last run: **89/89 unit-integration tests** and **27/28 browser tests** passed. Screenshots written by the E2E run are in `docs/screenshots/`.
+Results of the last run: **111/111 unit-integration tests** and **28/28 browser tests** passed. Screenshots written by the E2E run are in `tests/e2e/out/screenshots/`.
 
 ## What the unit/integration tests prove (Node, real GLB, no mocks)
 
@@ -25,6 +25,9 @@ Results of the last run: **89/89 unit-integration tests** and **27/28 browser te
 | `locomotion.test.ts` | 10 | arrives within 7 cm and resolves; **stance feet slide < 4 mm per frame**; ankles reach IK targets (< 25 mm) and never sink; pelvis bob < 7 cm, lateral < 6 cm; turn accuracy < 3° by stepping; turns before walking when the goal is behind; squat-bounce keeps feet planted (< 1 cm drift) and knees flex; works for friendly/futuristic/concierge/mascot (different leg lengths) |
 | `motion.test.ts` | 7 | JSON motions: compile/register/play moves real bones, events, precise validation errors, limit clamping + loop warnings, built-in protection, **every built-in exports to JSON and re-compiles within 12° of the original**, JSON commands |
 | `api.test.ts` | 23 | every Robot API call changes the expected bones/morphs: `moveHead`, `moveArm`, `moveJoint`, limits/clamping, fingers, `lookAt` (point and moving object), `setEyeDirection` (per eye), wink, `moveTorso`, shrug, `pointAt` IK (fingertip within 12 cm of a reachable target; straight arm when out of reach), `resetPose`; state machine (bundles, error lock, barge-in); JSON commands (validation, sequence, parallel, wait, speak), transport bridge; **engine update = 0.19 ms/frame**; dispose |
+| `bridge.test.ts` | 2 | detach ignores late commands, including legacy transports; closing a connection cancels a pending reconnect |
+| `remote-api.test.ts` | 4 | HTTP/WebSocket authentication, reply isolation by robot, immediate settlement on disconnect, body/command/timeout limits |
+| `studio.test.ts` | 3 | concurrent model loads keep only the latest request; a failed replacement keeps the current robot; a load finishing after unmount is disposed |
 
 ## What the browser tests prove (real Chromium, WebGL via SwiftShader)
 
@@ -34,9 +37,9 @@ Boot (40 bones, no console errors) · robot visible from full/face/side/back cam
 
 | Test | Result |
 |---|---|
-| Vowels `aa E I O U` + `s` synthesised by formant synthesis, played through Web Audio in Chromium, mouth sampled every ~6 ms | aa 27/27, E 27/27, I 27/27, O 28/28, U 27/27, SS 23/23 samples matched the expected viseme (segment interiors) |
+| Vowels `aa E I O U` + `s` synthesised by formant synthesis, played through Web Audio in Chromium, mouth sampled every ~6 ms | aa 15/15, E 13/13, I 15/15, O 13/13, U 13/13, SS 11/11 samples matched the expected viseme (segment interiors) |
 | Silence between vowels | mouth open in < 35 % of samples (test threshold) |
-| Hybrid: synthetic "hello" clip + text `hello` | mean opening 0.11 in the leading silence, 0.93 during speech, 0.00 in the tail |
+| Hybrid: synthetic "hello" clip + text `hello` | mean opening 0.14 in the leading silence, 0.94 during speech, 0.01 in the tail |
 | Offline analysis (Node) at 16/22.05/44.1 kHz | all labelled segments correct; onset ≈ 20–40 ms |
 
 **These are synthetic signals** (steady vowels, noise bursts) chosen because their ground truth is known. They show that the pipeline, timing and clock sync work; they do **not** show accuracy on natural speech, accents, noise, or any commercial TTS. Perform your own listening test with real recordings before relying on audio-only sync, or use TTS-provided timings.
