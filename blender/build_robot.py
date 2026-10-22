@@ -549,38 +549,18 @@ def humanoid_parts(P, S, L, bones, bone_index):
     for side, sx in (("L", 1), ("R", -1)):
         shx, shz = L["sh_x"] * sx, L["sh_z"]
         elb, wr = L["elbow"], L["wrist"]
-        # -- arm: ONE smooth surface from the rounded shoulder to the wrist (deltoid, biceps, soft elbow, forearm),
-        #    smooth-skinned across upperarm/forearm/hand so it bends like a human arm (no ball joints, no rings)
+        # -- arm: refined segmented shell like the reference: sculpted charcoal shoulder cap hugging the torso,
+        #    white upper-arm and forearm shells that flare over small recessed charcoal joints (no exposed balls/rings)
         un.capsule((sx * tx * 0.3, 0, shz - 0.008), (shx - sx * 0.02, 0, shz - 0.008), r * 0.95, r, f"clavicle_{side}")
-        top, bot = shz + 0.055, wr - 0.012
-
-        def arm_w(co, elb=elb, wr=wr, side=side):
-            def ss(a_, b_, x):
-                k = min(1.0, max(0.0, (x - a_) / (b_ - a_)))
-                return k * k * (3 - 2 * k)
-            w_up = ss(elb - 0.035, elb + 0.035, co.z)
-            w_hand = 1 - ss(wr - 0.015, wr + 0.02, co.z)
-            return {f"upperarm_{side}": w_up * (1 - w_hand), f"forearm_{side}": (1 - w_up) * (1 - w_hand), f"hand_{side}": w_hand}
-
-        te, tw = (top - elb) / (top - bot), (top - wr) / (top - bot)
-        keys = [(0.0, 0.06), (0.1, 0.062), (0.24, 0.05), (te * 0.7, 0.047), (te, 0.04), (te + 0.12, 0.043), (tw - 0.06, 0.031), (1.0, 0.028)]
-
-        def arm_r(t, keys=keys):
-            if t <= 0 or t >= 1:
-                return 0.0
-            i = 0
-            while i < len(keys) - 2 and t > keys[i + 1][0]:
-                i += 1
-            (t0, r0), (t1, r1) = keys[i], keys[i + 1]
-            u = min(1.0, max(0.0, (t - t0) / (t1 - t0)))
-            r_ = r0 + (r1 - r0) * (1 - math.cos(math.pi * u)) / 2
-            c0, c1 = 0.12, 0.04
-            if t < c0:
-                r_ *= math.sqrt(max(0.0, 1 - ((c0 - t) / c0) ** 2))
-            if t > 1 - c1:
-                r_ *= math.sqrt(max(0.0, 1 - ((t - 1 + c1) / c1) ** 2))
-            return r_
-        sh.lathe((shx, 0, top), (shx, 0, bot), arm_r, arm_w, nu=56, nv=72, cross=(1.0, 0.95))
+        dk.ellipsoid((shx, 0, shz - 0.01), (0.04, 0.04, 0.04), f"upperarm_{side}", nu=24, nv=12)                     # hidden pivot
+        dk.ellipsoid((shx + sx * 0.008, 0, shz + 0.012), (0.066, 0.062, 0.058), f"upperarm_{side}", e1=0.7, e2=0.85,
+                     taper=(0.82, 1.0), nu=48, nv=24)                                                                # shoulder cap
+        sh.ellipsoid((shx, 0, (shz + elb) / 2 - 0.012), (0.046, 0.044, (shz - elb) / 2 - 0.004), f"upperarm_{side}",
+                     e1=0.8, e2=0.95, taper=(0.86, 1.0), nu=40, nv=24)                                               # upper-arm shell
+        dk.ellipsoid((shx, 0, elb), (0.034, 0.034, 0.036), f"forearm_{side}", nu=24, nv=12)                           # recessed elbow
+        sh.ellipsoid((shx, 0, (elb + wr) / 2 - 0.006), (0.043, 0.041, (elb - wr) / 2 + 0.004), f"forearm_{side}",
+                     e1=0.8, e2=0.95, taper=(0.74, 1.0), nu=40, nv=24)                                               # forearm shell
+        dk.ellipsoid((shx, 0, wr + 0.004), (0.026, 0.025, 0.02), f"forearm_{side}", e1=0.6, nu=24, nv=8)              # slim wrist
         # -- hand: white back, charcoal palm and knuckles
         sh.ellipsoid((shx, 0, wr - 0.052), (0.027, 0.047, 0.05), f"hand_{side}", e1=0.7, e2=0.8, nu=28, nv=14)
         dk.ellipsoid((shx - sx * 0.019, 0, wr - 0.048), (0.012, 0.037, 0.039), f"hand_{side}", e1=0.6, nu=18, nv=8)
