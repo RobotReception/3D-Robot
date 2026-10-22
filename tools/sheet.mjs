@@ -1,9 +1,21 @@
 // Renders a list of poses to a contact sheet. usage: node tools/sheet.mjs out.png style cam "name|js|seconds" ...
+// Screenshots go to SHEET_DIR (env, default tests/e2e/out/sheet); PREFIX names the files.json chunk.
 import { chromium } from "playwright-core";
 import fs from "node:fs";
+import path from "node:path";
 const [, , out, style, cam, ...items] = process.argv;
+const ROOT = path.join(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"), "../..");
+const SHEET_DIR = process.env.SHEET_DIR ?? path.join(ROOT, "tests/e2e/out/sheet");
+fs.mkdirSync(SHEET_DIR, { recursive: true });
+const CHROME = process.env.CHROME_PATH || [
+  chromium.executablePath(),
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  "/usr/bin/chromium", "/usr/bin/google-chrome",
+].find((p) => fs.existsSync(p));
+if (!CHROME) throw new Error("Chromium not found. Run npx playwright-core install chromium or set CHROME_PATH.");
 const browser = await chromium.launch({
-  executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+  executablePath: CHROME,
   args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
 });
 const page = await browser.newPage({ viewport: { width: 420, height: 520 } });
@@ -34,10 +46,10 @@ for (const [i, it] of items.entries()) {
     else window.viewer.setCameraPreset(cam, false, r);
     window.viewer.frame(0);
   }, { js, secs, cam: cam1 || cam });
-  const f = `/tmp/claude-0/sheet_${process.env.PREFIX || ""}${i}.png`;
+  const f = path.join(SHEET_DIR, `sheet_${process.env.PREFIX || ""}${i}.png`);
   await page.screenshot({ path: f });
   files.push([name, f]);
 }
 await browser.close();
-fs.writeFileSync(`/tmp/claude-0/sheet_${process.env.PREFIX || ""}files.json`, JSON.stringify(files));
+fs.writeFileSync(path.join(SHEET_DIR, `sheet_${process.env.PREFIX || ""}files.json`), JSON.stringify(files));
 console.log(JSON.stringify(files.map((f) => f[0])));

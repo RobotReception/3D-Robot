@@ -9,3 +9,5 @@ coverage
 old/
 __pycache__
 *.blend1
+public/models/_bakefinal.glb
+docs/screenshots/baseline/

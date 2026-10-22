@@ -1,0 +1,15 @@
+{
+  "comment": "Shared pose list for realism 'before/after' baseline renders. Same camera/layout must be kept for both runs.",
+  "poses": [
+    { "name": "front", "js": "", "secs": 0.05, "cam": "full" },
+    { "name": "side", "js": "", "secs": 0.05, "cam": "side" },
+    { "name": "back", "js": "", "secs": 0.05, "cam": "back" },
+    { "name": "face happy", "js": "r.setEmotion('happy')", "secs": 0.7, "cam": "face" },
+    { "name": "greeting", "js": "r.playAnimation('greeting')", "secs": 1.2, "cam": "full" },
+    { "name": "thinking", "js": "r.playAnimation('thinking')", "secs": 1.0, "cam": "upper" },
+    { "name": "pointing", "js": "r.pointAt({x:0.9,y:1.45,z:1.3})", "secs": 1.0, "cam": "upper" },
+    { "name": "happy", "js": "r.playAnimation('happy')", "secs": 1.2, "cam": "full" },
+    { "name": "walking", "js": "r.walkTo({x:0,z:2})", "secs": 1.4, "cam": "side" }
+  ],
+  "styles": ["friendly", "futuristic", "premium", "concierge", "mascot"]
+}
