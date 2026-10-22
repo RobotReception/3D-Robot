@@ -94,7 +94,7 @@ function Toolbar({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) 
         </label>
         <label>{t("Background")}
           <select value={core.viewer.background} onChange={(e) => core.setBackground(e.target.value as BackgroundPreset)} data-testid="bg-select">
-            {(["studio", "light", "dusk", "green", "transparent"] as const).map((b) => <option key={b}>{b}</option>)}
+            {(["lobby", "studio", "light", "dusk", "green", "transparent"] as const).map((b) => <option key={b}>{b}</option>)}
           </select>
         </label>
       </div>

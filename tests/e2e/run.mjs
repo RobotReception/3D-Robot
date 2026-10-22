@@ -57,6 +57,8 @@ async function open(opts = {}) {
   await page.waitForFunction(() => window.robot && window.studio, null, { timeout: 60000 });
   // the software rasteriser is slow: run the functional checks at "medium" (no bloom); bloom is verified separately
   await page.evaluate(() => window.studio.setQuality("medium"));
+  // the lobby (default) is heavier than the plain studio backdrop: functional checks use the light one, the lobby has its own test
+  await page.evaluate(() => window.studio.setBackground("studio"));
   return { ctx, page };
 }
 const status = (page) => page.evaluate(() => window.robot.getStatus());
@@ -285,6 +287,26 @@ await check("JSON command console executes commands; invalid input reports an er
   ok(ev.includes("command"), "events not logged");
   await page.screenshot({ path: path.join(shotDir, "studio-developer.png") });
   return true;
+});
+
+await check("lobby environment: a real room around the robot (floor, walls, desk, glass wall), camera stays inside", async () => {
+  await page.selectOption('[data-testid="bg-select"]', "lobby");
+  await page.waitForTimeout(1500);
+  const r = await page.evaluate(() => {
+    const v = window.viewer;
+    const lobby = v.scene.getObjectByName("Lobby");
+    v.setCameraPreset("full", false, window.robot);
+    return { has: !!lobby, kids: lobby?.children.length ?? 0, grid: v.scene.children.some((c) => c.type === "GridHelper" && c.visible), maxDist: v.controls.maxDistance };
+  });
+  ok(r.has && r.kids > 60, "lobby not built: " + JSON.stringify(r));
+  ok(!r.grid && r.maxDist <= 6, "studio floor/grid should be hidden and orbit limited inside the room: " + JSON.stringify(r));
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: path.join(shotDir, "studio-lobby.png") });
+  await page.selectOption('[data-testid="bg-select"]', "studio");
+  await page.waitForTimeout(500);
+  const gone = await page.evaluate(() => !window.viewer.scene.getObjectByName("Lobby"));
+  ok(gone, "lobby should be removed when switching back");
+  return r;
 });
 
 await check("lighting controls change the real lights and exposure", async () => {

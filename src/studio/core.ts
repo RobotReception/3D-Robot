@@ -43,7 +43,7 @@ export class StudioCore {
   onBoneSelected?: (bone: string) => void;
 
   async init(container: HTMLElement) {
-    this.viewer = new RobotViewer(container, { quality: "high", preserveDrawingBuffer: true });
+    this.viewer = new RobotViewer(container, { quality: "high", background: "lobby", preserveDrawingBuffer: true });
     this.marker = new THREE.Mesh(
       new THREE.SphereGeometry(0.035, 16, 12),
       new THREE.MeshBasicMaterial({ color: 0xffc247, depthTest: false, transparent: true, opacity: 0.9 }),

@@ -20,6 +20,8 @@ a **Control Studio** to test everything.
 
 ![Control Studio](docs/screenshots/studio-cam-full.png)
 
+**Environment:** the Studio opens in a procedural reception **lobby** (polished stone floor, walnut slat feature wall with a backlit sign, reception desk, glass wall with daylight, plants, downlights). Reflections on the robot come from the room itself. Switch with *Background* (`lobby`, `studio`, `light`, ...) or `viewer.setBackground("lobby")`.
+
 ## Quick start
 
 ```bash
