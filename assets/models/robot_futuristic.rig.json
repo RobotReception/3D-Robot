@@ -648,5 +648,12 @@
   "wrist": 0.625,
   "hip_x": 0.09
  },
- "height_m": 1.551
+ "height_m": 1.551,
+ "textures": {
+  "color": "futuristic_color.jpg",
+  "metal_rough": "futuristic_metal_rough.jpg",
+  "normal": "futuristic_normal.jpg",
+  "emissive": "futuristic_emissive.png"
+ },
+ "design_version": 2
 }

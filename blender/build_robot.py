@@ -23,6 +23,9 @@ import bpy  # noqa: must be imported before bmesh
 import bmesh  # noqa: E402
 from mathutils import Matrix, Vector
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import atlas  # noqa: E402  (texture atlas kit, numpy+PIL based)
+
 # --------------------------------------------------------------------------- styles
 STYLES = {
     # Warm, rounded, approachable.
@@ -693,9 +696,447 @@ def mascot_parts(P, S, L, bones, bone_index):
         sh.ellipsoid((hx, -0.018, 0.038), (r * 1.18, 0.082 * fl / 0.8, 0.04), f"foot_{side}", e1=0.72, e2=0.82, nu=56, nv=26)
         gl.ellipsoid((hx, -0.018 - 0.082 * fl / 0.8 * 0.985, 0.028), (0.03, 0.0042, 0.004), f"toe_{side}", e1=0.5, axis=(0, -1, 0), nu=24, nv=8)
     return face_y, project
+# --------------------------------------------------------------------------- textures
+import numpy as np  # noqa: E402 (venv guarantees numpy; atlas relies on it)
+
+
+def _family_of(mat_name):
+    """Mat_Shell -> shell; Mat_Uniform -> uniform."""
+    base = mat_name[4:] if mat_name.startswith("Mat_") else mat_name
+    return base.lower()
+
+
+def _bake_target(mat, img):
+    """Create/refresh an unlinked bake-target Image Texture node in a material."""
+    node = mat.node_tree.nodes.get("bake_target")
+    if node is None:
+        node = mat.node_tree.nodes.new("ShaderNodeTexImage")
+        node.name = "bake_target"
+    node.image = img
+    for n in mat.node_tree.nodes.values():
+        n.select = False
+    mat.node_tree.nodes.active = node
+    node.select = True
+    return node
+
+
+def _drop_bake_target(mat):
+    node = mat.node_tree.nodes.get("bake_target") if mat.node_tree else None
+    if node is not None:
+        mat.node_tree.nodes.remove(node)
+
+
+def _isolate_atlas_uv(me):
+    """Leave exactly one uv layer ("atlas", active) -> stable TEXCOORD_0.
+
+    Ops-built meshes often carry a stale "UVMap" layer with junk coords; the
+    glTF exporter exports the first uv layer as TEXCOORD_0, so any survivor
+    would sample the atlas' white void region.
+    """
+    for u in [u for u in (me.uv_layers or []) if u.name != "atlas"]:
+        me.uv_layers.remove(u)
+    if "atlas" not in me.uv_layers:
+        me.uv_layers.new(name="atlas")
+    me.uv_layers.active = me.uv_layers["atlas"]
+
+
+def _uv_tile(obj, rect, pad=12):
+    """Smart-UV one mesh, then normalize its uv bbox into one atlas tile rect.
+
+    rect is the ABSOLUTE tile (x0, y0, w, h) in atlas pixels; uv coords become
+    absolute too, so a full-atlas 2048 bake image lines up with the canvas.
+    """
+    me = obj.data
+    if not me.polygons:
+        return
+    _isolate_atlas_uv(me)
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        bpy.ops.mesh.select_all(action="SELECT")
+        try:
+            bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.02,
+                                     correct_aspect=True, scale_to_bounds=False)
+        except Exception as e:
+            print("WARN smart_project failed on", obj.name, e)
+            bpy.ops.uv.cube_project(cube_size=1.5)
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+    # re-fetch mesh/layer AFTER the edit-mode round trip: the python uv-layer
+    # reference can go stale across a bmesh rebuild (invalid layer.data).
+    me = obj.data
+    layer = me.uv_layers["atlas"]
+    n = len(layer.data)
+    uvs = np.empty(n * 2, dtype=np.float32)
+    layer.data.foreach_get("uv", uvs)
+    np_uvs = uvs.reshape(n, 2)
+    umin = np_uvs.min(axis=0)
+    span = np.clip(np_uvs.max(axis=0) - umin, 1e-6, None)
+    p01 = (np_uvs - umin) / span
+    x0, y0, w, h = rect
+    px = x0 + pad + p01[:, 0] * (w - 2 * pad)
+    py = y0 + pad + p01[:, 1] * (h - 2 * pad)
+    # Author v = py/ATLAS (py = canvas row). glb v becomes 1 - v (exporter
+    # flip); we therefore save every atlas mirrored top-down (_save_canvas)
+    # so the sampler's row v*2048 == the canvas row exactly.
+    uv = np.stack([px / atlas.ATLAS, py / atlas.ATLAS], axis=1)
+    layer.data.foreach_set("uv", uv.reshape(-1).astype(np.float32))
+    me.update()
+
+
+def _face_uv(obj, sub):
+    """Planar (x, z) UV into one face sub-rect; returns the layout entry."""
+    me = obj.data
+    _isolate_atlas_uv(me)
+    lay = me.uv_layers["atlas"]
+    n = len(me.vertices)
+    coords = np.empty(n * 3, dtype=np.float32)
+    me.vertices.foreach_get("co", coords)
+    co = coords.reshape(n, 3)
+    minx, minz = co[:, 0].min(), co[:, 2].min()
+    dx = max(co[:, 0].max() - minx, 1e-5)
+    dz = max(co[:, 2].max() - minz, 1e-5)
+    sx, sy, sw, sh = sub
+    ux0, uy0, _, _ = atlas.SLOTS["face"]
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            p = me.vertices[me.loops[li].vertex_index].co
+            u = (p.x - minx) / dx
+            v = (p.z - minz) / dz
+            u = np.clip(u, 0.0, 1.0)
+            v = np.clip(v, 0.0, 1.0)
+            px, py = sx + 2 + u * (sw - 4), sy + 2 + (1.0 - v) * (sh - 4)
+            lay.data[li].uv = ((ux0 + px) / atlas.ATLAS, (uy0 + py) / atlas.ATLAS)
+    me.update()
+    return {"rect": tuple(sub), "bbox": (float(minx), float(minz), float(dx), float(dz))}
+
+
+def _cycle_bake(op_type, obj, samples, ao_distance=None, clear=True):
+    """Cycles-bake the active object into its material's bake_target image."""
+    scene = bpy.context.scene
+    scene.render.engine = "CYCLES"
+    try:
+        scene.cycles.device = "CPU"
+    except Exception:
+        pass
+    scene.cycles.samples = max(2, int(samples))
+    scene.cycles.use_denoising = False
+    scene.cycles.use_adaptive_sampling = False
+    if ao_distance is not None:
+        try:
+            scene.cycles.ao_distance = ao_distance
+        except Exception:
+            pass
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    args = dict(type=op_type, uv_layer="atlas", margin=8, margin_type="EXTEND",
+                use_clear=clear, use_selected_to_active=False)
+    if op_type == "NORMAL":
+        args["normal_space"] = "TANGENT"
+    result = bpy.ops.object.bake(**args)
+    if "FINISHED" not in result:
+        raise RuntimeError(f"{op_type} bake failed for {obj.name}: {result}")
+
+
+def _bake_full(obj, op_type, samples, ao_distance=None):
+    """Bake one object into a full-atlas image and read it back as numpy RGB."""
+    mat = obj.data.materials[0]
+    img = bpy.data.images.new("_bake_full", atlas.ATLAS, atlas.ATLAS)
+    img.pixels.foreach_set(np.ones(atlas.ATLAS * atlas.ATLAS * 4, dtype=np.float32))
+    _bake_target(mat, img)
+    try:
+        _cycle_bake(op_type, obj, samples, ao_distance=ao_distance, clear=False)
+        return atlas.image_to_rgba(img)[::-1]
+    finally:
+        _drop_bake_target(mat)
+        bpy.data.images.remove(img)
+
+
+def _bake_full_bumped(obj, samples, dist, scale):
+    """Full-atlas TANGENT-space NORMAL bake through a temporary noise->bump swap.
+
+    Saves the material's Normal links, wires a Noise Texture -> Bump chain with
+    per-family (dist, scale) into the Principled BSDF for one bake, then
+    restores the original wiring. Returns RGB (top-down) like _bake_full."""
+    mat = obj.data.materials[0]
+    img = bpy.data.images.new("_bake_bump", atlas.ATLAS, atlas.ATLAS)
+    img.pixels.foreach_set(np.zeros(atlas.ATLAS * atlas.ATLAS * 4, dtype=np.float32))
+    _bake_target(mat, img)
+    nt = mat.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    saved = [l.from_socket for l in nt.links
+             if l.to_node is bsdf and l.to_socket.name == "Normal"]
+    for l in [l for l in nt.links if l.to_node is bsdf and l.to_socket.name == "Normal"]:
+        nt.links.remove(l)
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = scale
+    noise.inputs["Detail"].default_value = 8.0
+    bump = nt.nodes.new("ShaderNodeBump")
+    bump.inputs["Strength"].default_value = 1.0
+    bump.inputs["Distance"].default_value = dist
+    nt.links.new(noise.outputs["Fac"], bump.inputs["Height"])
+    nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    try:
+        _cycle_bake("NORMAL", obj, samples, ao_distance=None, clear=False)
+        return atlas.image_to_rgba(img)[::-1]
+    finally:
+        for l in [l for l in nt.links if l.to_node is bsdf and l.to_socket.name == "Normal"]:
+            nt.links.remove(l)
+        for sock in saved:
+            nt.links.new(sock, bsdf.inputs["Normal"])
+        nt.nodes.remove(noise)
+        nt.nodes.remove(bump)
+        _drop_bake_target(mat)
+        bpy.data.images.remove(img)
+
+
+# per-family bump for the NORMAL bakes: (distance [m], noise scale)
+# Broad, gentle undulations only: high-frequency grain read as chrome sparkle
+# and exploded the normal-map bitrate; keep features >= ~4 mm.
+PUMP = {
+    "shell": (0.0016, 160.0), "shell2": (0.0020, 180.0), "dark": (0.0014, 180.0),
+    "uniform": (0.0040, 200.0), "visor": (0.0006, 260.0), "accent": (0.0016, 170.0),
+    "glow": (0.0012, 220.0), "face": (0.0008, 260.0),
+}
+
+
+def _style_knobs(style_name, S, human, masc):
+    """Per-family (rough, metal) mirroring the make_material() values exactly."""
+    return {
+        "shell": (S["rough"], S["metal"] * 0.4),
+        "shell2": (S["rough"] + 0.08, S["metal"]),
+        "dark": (0.28 if human else 0.55, 0.2 if human else 0.3),
+        "accent": (0.25 if human else 0.28, 0.9 if human else (0.1 if style_name == "friendly" else 0.7)),
+        "visor": (0.16 if masc else 0.09, 0.0),
+        "glow": (0.4, 0.0),
+        "face": (0.5, 0.0),
+        "uniform": (0.34, 0.1),
+    }
+
+
+def _base_colors(S, human, masc):
+    visor = (0.0, 0.0, 0.004) if masc else (0.01, 0.012, 0.018)
+    darkish = (0.02, 0.02, 0.025)
+    out = {"shell": S["shell"], "shell2": S["shell2"], "dark": S["dark"], "accent": S["accent"],
+           "visor": visor, "glow": darkish, "face": darkish}
+    if human and "uniform" in S:
+        out["uniform"] = S["uniform"]
+    return out
+
+
+def _srgb_encode(a):
+    return np.clip(np.power(np.clip(a, 0.0, 1.0), 1.0 / 2.2), 0.0, 1.0)
+
+
+def _save_canvas(canvas, path, srgb=False, quality=90, subsampling=None, down=1):
+    pil = atlas.to_pil(_srgb_encode(canvas) if srgb else np.clip(canvas, 0.0, 1.0))
+    # The exporter stores v = 1 - authored v; mirror the bitmap top-down so
+    # the sampler's v (flipY=false) walks rows exactly like the canvas did.
+    pil = pil.transpose(atlas.Image.FLIP_TOP_BOTTOM)
+    if down > 1:
+        pil = pil.resize((pil.width // down, pil.height // down), atlas.Image.LANCZOS)
+    if path.lower().endswith((".jpg", ".jpeg")):
+        options = {"quality": quality}
+        if subsampling is not None:
+            options["subsampling"] = subsampling
+        pil.save(path, **options)
+    else:
+        pil.save(path)
+
+
+def _load_tex(path, non_color=False):
+    img = bpy.data.images.load(os.path.abspath(path), check_existing=False)
+    img.colorspace_settings.name = "Non-Color" if non_color else "sRGB"
+    return img
+
+
+def _wire_material(mat, files, kind):
+    """Add texture nodes: Base Color, Normal, Metallic/Roughness, Emission."""
+    nt = mat.node_tree
+    _drop_bake_target(mat)
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    col = nt.nodes.new("ShaderNodeTexImage")
+    col.image = _load_tex(files["color"])
+    nt.links.new(col.outputs["Color"], bsdf.inputs["Base Color"])
+    nrm = nt.nodes.new("ShaderNodeTexImage")
+    nrm.image = _load_tex(files["normal"], non_color=True)
+    nm = nt.nodes.new("ShaderNodeNormalMap")
+    nm.inputs["Strength"].default_value = 1.0
+    nt.links.new(nrm.outputs["Color"], nm.inputs["Color"])
+    nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
+    mrt = nt.nodes.new("ShaderNodeTexImage")
+    mrt.image = _load_tex(files["metal_rough"], non_color=True)
+    sep = nt.nodes.new("ShaderNodeSeparateColor")
+    nt.links.new(mrt.outputs["Color"], sep.inputs["Color"])
+    nt.links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
+    nt.links.new(sep.outputs["Blue"], bsdf.inputs["Metallic"])
+    if kind in ("glow", "face"):
+        em = nt.nodes.new("ShaderNodeTexImage")
+        em.image = _load_tex(files["emissive"])
+        nt.links.new(em.outputs["Color"], bsdf.inputs["Emission Color"])
+
+
+def _tile_grid(slot, count, pad=12):
+    """Split one slot into a cols x rows grid of tiles for count objects."""
+    cols = max(1, int(math.ceil(math.sqrt(max(1, count)))))
+    rows = max(1, int(math.ceil(count / cols)))
+    x0, y0, w, h = slot
+    tw, th = w // cols, h // rows
+    tiles = [(x0 + c * tw, y0 + r * th, tw, th) for r in range(rows) for c in range(cols)]
+    return tiles, pad
+
+
+def _shift_uv(obj, offset):
+    """Add `offset` to every uv of `obj` (re-fetches the layer freshly).
+
+    All our textures tile with REPEAT wrapping, so a +1.0 shift renders
+    identically, but keeps every TEXCOORD out of [0,1]; glTF-transform's
+    meshopt step then skips quantizing uv (its quantized texcoords decode
+    unnormalized -> uv * 65536 in three.js) and we keep exact float32 uv.
+    """
+    me = obj.data
+    layer = me.uv_layers.get("atlas")
+    if layer is None or not len(layer.data):
+        return
+    n = len(layer.data)
+    uvs = np.empty(n * 2, dtype=np.float32)
+    layer.data.foreach_get("uv", uvs)
+    uvs[0::2] += offset
+    uvs[1::2] += offset
+    layer.data.foreach_set("uv", uvs)
+    me.update()
+
+
+def texturize(style_name, S, L, objs, face_objs, mats, tex_dir, samples=16):
+    """Bake AO + normal, compose metallicRoughness + emissive, save 4 textures and
+    wire them into the materials. Raises on failure; callers must catch."""
+    human = S.get("kind") == "humanoid"
+    masc = S.get("kind") == "mascot"
+    os.makedirs(tex_dir, exist_ok=True)
+    knob = _style_knobs(style_name, S, human, masc)
+    base = _base_colors(S, human, masc)
+
+    fam_objs = {}
+    for o in objs:
+        if len(o.data.polygons):
+            fam = _family_of(o.data.materials[0].name)
+            fam_objs.setdefault(fam, []).append(o)
+    face_objs = [o for o in face_objs if len(o.data.polygons)]
+
+    looks = {fam: atlas.Look(kind=fam, rough=knob[fam][0], metal=knob[fam][1],
+                             rough_var=0.18 if fam in ("shell", "shell2") else 0.22,
+                             deposit=0.6 if style_name == "concierge" else 0.35,
+                             seed=int(math.fmod(abs(hash(fam)), 900)) + 3) for fam in knob}
+    mr = atlas.build_metal_rough(looks)
+
+    color = atlas.empty_canvas(3, 1.0)
+    normal = atlas.build_normal(looks)
+    emissive = atlas.empty_canvas(3, 0.0)
+
+    scene = bpy.context.scene
+    scene.render.engine = "CYCLES"
+
+    # ---- body families: per-object tiles -----------------------------------
+    def area(o):
+        bb = o.bound_box
+        dx = bb[6][0] - bb[0][0]
+        dy = bb[6][1] - bb[0][1]
+        dz = bb[6][2] - bb[0][2]
+        return dx * dy * dz
+
+    for fam, group in fam_objs.items():
+        group = sorted(group, key=area, reverse=True)
+        tiles, pad = _tile_grid(atlas.SLOTS[fam], len(group))
+        smp = max(4, samples // 2)
+        for rect, o in zip(tiles, group):
+            print("[tex] uv", o.name, fam, rect)
+            _uv_tile(o, rect, pad=pad)
+            rx, ry, rw, rh = rect
+            ao_full = _bake_full(o, "AO", smp, ao_distance=0.55)
+            ao_tile = ao_full[ry:ry + rh, rx:rx + rw].mean(axis=2)[:, :, np.newaxis]
+            ao_full = None
+            shade = (1.0 - 0.8) + 0.8 * np.clip(ao_tile, 0.0, 1.0)
+            color[ry:ry + rh, rx:rx + rw] = np.clip(
+                np.asarray(base[fam], dtype=np.float32)[None, None, :] * shade, 0.0, 1.0)
+            dist, nsc = PUMP[fam]
+            bump_full = _bake_full_bumped(o, smp, dist, nsc)
+            normal[ry:ry + rh, rx:rx + rw] = bump_full[ry:ry + rh, rx:rx + rw]
+            bump_full = None
+
+    # ---- face family: per-object bakes inside the face slot -----------------
+    face_layout = {}
+    if face_objs:
+        for o in face_objs:
+            print("[tex] face uv", o.name)
+            face_layout[o.name] = _face_uv(o, atlas.FACE_SUB[o.name])
+        FX, FY, FW, FH = atlas.SLOTS["face"]
+        cview = color[FY:FY + FH, FX:FX + FW]
+        nview = normal[FY:FY + FH, FX:FX + FW]
+        base_f = np.asarray(base["face"], dtype=np.float32)
+        fdist, fnsc = PUMP["face"]
+        for o in face_objs:
+            sx, sy, sw, sh = atlas.FACE_SUB[o.name]
+            smp = max(4, samples // 2)
+            ao_full = _bake_full(o, "AO", smp, ao_distance=0.3)
+            a = ao_full[FY + sy:FY + sy + sh, FX + sx:FX + sx + sw].mean(axis=2)
+            ao_full = None
+            shade = 0.55 + 0.45 * np.clip(a, 0.0, 1.0)
+            cview[sy:sy + sh, sx:sx + sw] = np.clip(base_f[None, None, :] * shade[:, :, np.newaxis], 0.0, 1.0)
+            bump_full = _bake_full_bumped(o, smp, fdist, fnsc)
+            nview[sy:sy + sh, sx:sx + sw] = bump_full[FY + sy:FY + sy + sh, FX + sx:FX + sx + sw]
+            bump_full = None
+    else:
+        face_layout = {name: {"rect": sub, "bbox": (0.0, 0.0, 1e-4, 1e-4)}
+                       for name, sub in atlas.FACE_SUB.items()}
+
+    # ---- emissive -----------------------------------------------------------
+    hr, hc = S["head_r"], L["head_c"]
+    hrz = S["head_r"] * S["head_sq"][2]
+    ew, eh_ = S["eye"][0] * 0.5, S["eye"][1] * 0.5
+    ex = hr * S.get("eye_x_k", 0.36)
+    ez = hc + hr * S.get("eye_z_k", 0.04)
+    info = {
+        "glow": S["glow"], "eye_p": S.get("eye_p", 2.7),
+        "hide_idle": bool(S.get("hide_idle_face")),
+        "eye": {"half_w": ew, "half_h": eh_},
+        "brow": {"half_w": ew * 0.95, "th": 0.0095},
+        "mouth": {"half_w": S["mouth_w"], "th": 0.0065},
+        "centers": {"Eye_L": (ex, ez), "Eye_R": (-ex, ez),
+                    "Brow_L": (ex, ez + eh_ * 1.45), "Brow_R": (-ex, ez + eh_ * 1.45),
+                    "Mouth": (0.0, hc - hrz * S.get("mouth_z_k", 0.45))},
+    }
+    atlas.draw_face_emissive(emissive, info, face_layout)
+    atlas.draw_face_color(color, info, face_layout)
+
+    # ---- save + wire ----------------------------------------------------------
+    files = {
+        "color": os.path.join(tex_dir, f"{style_name}_color.jpg"),
+        "metal_rough": os.path.join(tex_dir, f"{style_name}_metal_rough.jpg"),
+        "normal": os.path.join(tex_dir, f"{style_name}_normal.jpg"),
+        "emissive": os.path.join(tex_dir, f"{style_name}_emissive.png"),
+    }
+    _save_canvas(color, files["color"], srgb=True, quality=92)
+    _save_canvas(mr, files["metal_rough"], quality=88)
+    _save_canvas(normal, files["normal"], quality=92, subsampling=0, down=2)
+    _save_canvas(emissive, files["emissive"], srgb=True)
+    for fam in fam_objs:
+        _wire_material(mats[fam], files, fam)
+    _wire_material(mats["face"], files, "face")
+
+    # final export-only uv wrap shift (before this, bakes authored pixels/ATLAS)
+    for o in [o for fam_group in fam_objs.values() for o in fam_group] + list(face_objs):
+        _shift_uv(o, 1.0)
+
+    return {"design_version": atlas.DESIGN_VERSION,
+            "textures": {k: os.path.basename(v) for k, v in files.items()}}
+
+
 
 # --------------------------------------------------------------------------- main build
-def build(style_name, out_glb, out_blend=None, out_json=None):
+def build(style_name, out_glb, out_blend=None, out_json=None, tex_dir=None, samples=16):
     S = STYLES[style_name]
     L = layout(S)
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -920,6 +1361,17 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         face_objs.append(make_face_mesh(f"Brow_{side}", None, arm_obj, "head", bone_index, bone_names, brow_shape(0.0002, th=0.0001, inner=inner) if S.get("hide_idle_face") else mk(), face_y,
                                         bc, mats["face"], shapes, 7, 2, project=project))
 
+    # ---- textures (phase 1): bake + save + wire; falls back to untextured ----
+    applied_tex = None
+    if tex_dir:
+        try:
+            applied_tex = texturize(style_name, S, L, objs, face_objs, mats, tex_dir, samples)
+            arm_obj["design_version"] = atlas.DESIGN_VERSION
+        except Exception:
+            import traceback
+            print("WARN textures skipped:")
+            traceback.print_exc()
+
     # ---- export
     meta = {
         "style": style_name,
@@ -933,6 +1385,9 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         "layout": {k: round(v, 4) for k, v in L.items()},
         "height_m": round(hc + hrz * (1.0 if humanoid or mascot else 1.4), 3),
     }
+    if applied_tex is not None:
+        meta["textures"] = applied_tex["textures"]
+        meta["design_version"] = applied_tex["design_version"]
     if out_json:
         with open(out_json, "w") as f:
             json.dump(meta, f, indent=1)
@@ -955,6 +1410,17 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     ap.add_argument("--blend")
     ap.add_argument("--json")
+    ap.add_argument("--tex-dir", default=None)
+    ap.add_argument("--samples", type=int, default=16)
+    ap.add_argument("--no-tex", action="store_true")
     a = ap.parse_args(argv)
-    m = build(a.style, a.out, a.blend, a.json)
-    print("OK", a.style, a.out, "height", m["height_m"], "bones", len(m["bones"]))
+    tex_dir = a.tex_dir
+    if tex_dir is None:
+        tex_dir = os.path.join("assets", "textures", a.style)
+    if a.no_tex:
+        tex_dir = None
+    m = build(a.style, a.out, a.blend, a.json, tex_dir=tex_dir, samples=a.samples)
+    print("OK", a.style, a.out, "height", m["height_m"], "bones", len(m["bones"]),
+          "textures" if m.get("textures") else "flat")
+    sys.stdout.flush()
+    os._exit(0)  # bpy module teardown can crash (heap corruption); artifacts are already on disk

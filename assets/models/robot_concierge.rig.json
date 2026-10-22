@@ -650,5 +650,12 @@
   "wrist": 0.79,
   "hip_x": 0.1
  },
- "height_m": 1.765
+ "height_m": 1.765,
+ "textures": {
+  "color": "concierge_color.jpg",
+  "metal_rough": "concierge_metal_rough.jpg",
+  "normal": "concierge_normal.jpg",
+  "emissive": "concierge_emissive.png"
+ },
+ "design_version": 2
 }

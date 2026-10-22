@@ -11,7 +11,9 @@ for style in friendly futuristic premium concierge mascot; do
   "$PY" blender/build_robot.py --style "$style" \
     --out "assets/models/robot_${style}.raw.glb" \
     --blend "assets/models/robot_${style}.blend" \
-    --json "assets/models/robot_${style}.rig.json"
+    --json "assets/models/robot_${style}.rig.json" \
+    --tex-dir "assets/textures/${style}" \
+    --samples 16
   npx --no-install gltf-transform meshopt "assets/models/robot_${style}.raw.glb" "public/models/robot_${style}.glb" --level high
 done
 rm -f assets/models/*.blend1

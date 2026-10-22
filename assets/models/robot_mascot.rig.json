@@ -648,5 +648,12 @@
   "wrist": 0.205,
   "hip_x": 0.072
  },
- "height_m": 1.048
+ "height_m": 1.048,
+ "textures": {
+  "color": "mascot_color.jpg",
+  "metal_rough": "mascot_metal_rough.jpg",
+  "normal": "mascot_normal.jpg",
+  "emissive": "mascot_emissive.png"
+ },
+ "design_version": 2
 }
