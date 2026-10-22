@@ -56,7 +56,7 @@ STYLES = {
         shell=(0.95, 0.955, 0.965), shell2=(0.72, 0.74, 0.78), dark=(0.028, 0.031, 0.04), accent=(0.86, 0.66, 0.38),
         uniform=(0.007, 0.014, 0.05), glow=(0.0, 0.62, 1.0), metal=0.0, rough=0.22, coat=1.0, eye=(0.05, 0.06), eye_p=2.1,
         mouth_w=0.05, eye_x_k=0.34, eye_z_k=0.1, mouth_z_k=0.36, mouth_rest_curve=0.6, hide_brows=True,
-        glow_strength=1.6, face_strength=0.7,
+        glow_strength=1.2, face_strength=0.3,
     ),
     # Chibi mascot: huge head, small egg body, stubby limbs, glowing rings (cute assistant for kiosks/apps).
     "mascot": dict(
