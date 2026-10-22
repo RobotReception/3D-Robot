@@ -529,9 +529,23 @@ def humanoid_parts(P, S, L, bones, bone_index):
     s2.ellipsoid((nt[0], nt[1] - 0.004, nt[2]), (0.026, 0.004, 0.009), "chest", e1=0.4, e2=0.5,
                  nu=16, nv=8, axis=(0.25, -1, 0))                                                         # name tag
     # waist (charcoal under-suit) and white pelvis shell
-    dk.ellipsoid((0, 0, L["spine"] + 0.03), (tx * 0.55, ty * 0.82, 0.085), "spine", e1=0.55, nu=32, nv=10)
-    for dz in (0.0, 0.045):
-        s2.torus((0, 0, L["spine"] + dz), tx * 0.5, 0.005, "spine", nu=36, nv=6)
+    # one seamless sculpted waist: flares into the vest, pinches, flares into the hips (no stacked rings)
+    wt, wb = ch_c - ch_c_r * 0.55, L["pel"] + 0.03
+
+    def waist_r(t):
+        if t <= 0 or t >= 1:
+            return 0.0
+        r_ = tx * (0.56 - 0.1 * math.sin(math.pi * min(1.0, t * 1.15)))
+        cap = 0.08
+        if t < cap:
+            r_ *= math.sqrt(1 - ((cap - t) / cap) ** 2)
+        if t > 1 - cap:
+            r_ *= math.sqrt(1 - ((t - 1 + cap) / cap) ** 2)
+        return r_
+    dk.lathe((0, 0, wt), (0, 0, wb), waist_r, "spine", nu=64, nv=36, cross=(1.0, ty / tx * 1.05))
+    wr_ = tx * 0.478
+    gl.grid([[(wr_ * math.cos(2 * PI * j / 96), wr_ * ty / tx * 1.05 * math.sin(2 * PI * j / 96), z) for j in range(97)]
+             for z in ((wt + wb) / 2 - 0.004, (wt + wb) / 2 + 0.004)], "spine")                              # thin cyan waist line
     sh.ellipsoid((0, 0, L["pel"] - 0.005), (tx * 0.86, ty * 0.96, 0.095), "pelvis", e1=0.7, e2=0.8, nu=44, nv=18)
     for sx in (1, -1):  # charcoal groin seams
         dk.capsule((sx * 0.012, -ty * 0.93, L["pel"] - 0.07), (sx * 0.075, -ty * 0.82, L["pel"] + 0.03), 0.004, 0.004, "pelvis", nu=8, nv=6)
