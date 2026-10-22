@@ -36,7 +36,8 @@ describe("appearance", () => {
     const p = logo.getWorldPosition(new THREE.Vector3());
     const chest = robot.joints.restWorldPos("chest");
     expect(p.z).toBeGreaterThan(chest.z + 0.04); // on the front of the torso, not inside it
-    expect(p.y).toBeGreaterThan(chest.y);
+    expect(p.y).toBeGreaterThan(robot.joints.restWorldPos("spine").y); // on the chest, between waist and neck
+    expect(p.y).toBeLessThan(robot.joints.restWorldPos("neck").y);
     robot.playAnimation("bow");
     for (let i = 0; i < 60; i++) robot.update(1 / 60);
     robot.root.updateMatrixWorld(true);

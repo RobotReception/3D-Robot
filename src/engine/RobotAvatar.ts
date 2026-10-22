@@ -533,7 +533,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     const inv = this.root.matrixWorld.clone().invert();
     const chest = this.joints.restWorldPos("chest");
     const neck = this.joints.restWorldPos("neck");
-    const y = chest.y + (neck.y - chest.y) * (placement === "left" ? 0.62 : 0.55);
+    const y = placement === "center" && this.parts.logoHeight != null ? this.parts.logoHeight : chest.y + (neck.y - chest.y) * (placement === "left" ? 0.62 : 0.55);
     const x = placement === "left" ? Math.abs(this.joints.restWorldPos("eye_L").x) * 1.35 + 0.03 : 0;
     const body = this.parts.skinned.filter((m) => /^Body_/.test(m.name));
     const ray = new THREE.Raycaster(new THREE.Vector3(x, y, chest.z + 1).applyMatrix4(this.root.matrixWorld), new THREE.Vector3(0, 0, -1).transformDirection(this.root.matrixWorld));

@@ -60,12 +60,13 @@ STYLES = {
     ),
     # Chibi mascot: huge head, small egg body, stubby limbs, glowing rings (cute assistant for kiosks/apps).
     "mascot": dict(
-        kind="mascot", head_r=0.35, head_sq=(1.0, 0.9, 0.83), e_head=1.0, torso=(0.172, 0.15, 0.2),
-        e_box=0.9, thigh=0.05, shin=0.055, limb_r=0.048, upper=0.085, fore=0.075, chest_h=0.06, hip_x=0.072, foot=0.8,
-        ankle=0.04, sh_x=0.168, hand_scale=0.55, default_emotion="content",
-        shell=(0.95, 0.95, 0.965), shell2=(0.72, 0.74, 0.86), dark=(0.01, 0.011, 0.016), accent=(0.36, 0.36, 0.72),
-        glow=(0.16, 0.32, 1.0), metal=0.0, rough=0.34, coat=0.6, eye=(0.125, 0.11), eye_p=2.0, mouth_w=0.035,
-        eye_x_k=0.33, eye_z_k=0.035, mouth_z_k=0.3, visor_w=0.70, visor_h=0.64, visor_z=0.12, hide_idle_face=True, glow_strength=1.2, face_strength=0.45,
+        kind="mascot", head_r=0.25, head_sq=(1.0, 0.9, 0.86), e_head=0.86, torso=(0.172, 0.15, 0.2),
+        e_box=0.9, thigh=0.06, shin=0.06, limb_r=0.05, upper=0.085, fore=0.075, chest_h=0.07, hip_x=0.076, foot=0.85,
+        ankle=0.035, sh_x=0.178, hand_scale=0.6, logo_z=0.375,
+        shell=(0.93, 0.935, 0.945), shell2=(0.78, 0.8, 0.83), dark=(0.025, 0.028, 0.035), accent=(0.78, 0.8, 0.83),
+        glow=(0.0, 0.55, 1.0), metal=0.0, rough=0.42, coat=0.3, eye=(0.068, 0.078), eye_p=2.0, mouth_w=0.032,
+        eye_x_k=0.34, eye_z_k=0.08, mouth_z_k=0.3, mouth_rest_curve=0.85, hide_brows=True,
+        visor_w=0.76, visor_h=0.62, visor_z=0.0, visor_bulge=0.014, glow_strength=1.1, face_strength=0.5,
     ),
 }
 
@@ -603,28 +604,28 @@ def humanoid_parts(P, S, L, bones, bone_index):
 
 
 def mascot_parts(P, S, L, bones, bone_index):
-    """Chibi mascot built for smooth, seamless curves:
-    - body, arms (with mitten) and legs are single lathed surfaces with *smooth* skin weights (they bend, no ball joints)
-    - the faceplate is projected onto the head ellipsoid (flush, not a goggle) and so are the eyes/mouth/brows.
+    """Chibi assistant (reference sheet: 92 x 58 cm): big helmet head with an inset glossy black visor framed by a raised
+    rim, silver/white headphone pods with a thin cyan ring, glowing neck ring, pear-shaped body with a chest emblem and a
+    back service port, chunky smooth-skinned arms with real chubby fingers, short legs and rounded shoes.
     Returns (face_y, project_fn)."""
     hr, sq = S["head_r"], S["head_sq"]
     hc = L["head_c"]
     hrx, hry, hrz = hr * sq[0], hr * sq[1], hr * sq[2]
-    sh, dk, gl, ac, vi = P["shell"], P["dark"], P["glow"], P["accent"], P["visor"]
+    sh, s2, dk, gl, ac, vi = P["shell"], P["shell2"], P["dark"], P["glow"], P["accent"], P["visor"]
+    PI = math.pi
 
     def sstep(a_, b_, x):
         k = min(1.0, max(0.0, (x - a_) / (b_ - a_)))
         return k * k * (3 - 2 * k)
 
     def blend(b_hi, b_lo, z_mid, half):
-        """weight function: b_hi above z_mid+half, b_lo below z_mid-half, smooth in between"""
         def f(co):
             w = sstep(z_mid - half, z_mid + half, co.z)
             return {b_hi: w, b_lo: 1 - w}
         return f
 
     def profile(keys, cap0, cap1):
-        """keys: [(t, r)] smooth (cosine) interpolation, with elliptical caps of length cap0/cap1 (in t units)"""
+        """keys: [(t, r)] cosine-interpolated radius, elliptical caps of length cap0/cap1 (t units)"""
         def f(t):
             if t <= 0 or t >= 1:
                 return 0.0
@@ -641,84 +642,126 @@ def mascot_parts(P, S, L, bones, bone_index):
             return r
         return f
 
+    E = S["e_head"]
+
     def head_y(x, z, lift=0.0):
-        """front (-Y) surface of the head ellipsoid at (x, z), pushed outward by `lift` meters"""
-        q = 1 - (x / hrx) ** 2 - ((z - hc) / hrz) ** 2
-        return -hry * math.sqrt(max(q, 0.0)) - lift
+        """front (-Y) surface of the (super)ellipsoid head at (x, z), pushed outward by `lift` metres"""
+        q = 1 - abs(x / hrx) ** (2 / E) - abs((z - hc) / hrz) ** (2 / E)
+        return -hry * max(q, 0.0) ** (E / 2) - lift
 
-    # ---- head: true ellipsoid, very dense for clean highlights
-    sh.ellipsoid((0, 0, hc), (hrx, hry, hrz), "head", nu=128, nv=84)
-    # faceplate: rounded-square oval projected onto the head surface (flush, crisp edge)
-    fa, fb, fz, fp = hrx * S.get("visor_w", 0.70), hrz * S.get("visor_h", 0.64), hc + hrz * S.get("visor_z", 0.12), 2.5
-    rows = []
-    NR, NT = 22, 120
-    for i in range(NR + 1):
-        rr = i / NR
-        row = []
-        for j in range(NT + 1):
-            th = 2 * math.pi * j / NT
-            cx, cz = math.cos(th), math.sin(th)
-            k = (abs(cx) ** fp + abs(cz) ** fp) ** (-1 / fp)   # superellipse radius along this direction
-            x, z = fa * rr * k * cx, fz + fb * rr * k * cz
-            row.append((x, head_y(x, z, 0.0018), z))
-        rows.append(row)
-    vi.grid(rows, "head")
-    project = lambda x, z: head_y(x, z, 0.0045)   # face LEDs float 4.5 mm above the faceplate
-    face_y = head_y(0, hc, 0.0045)
+    # ---- head: rounded helmet (slightly squarer than a sphere), dense for clean highlights
+    sh.ellipsoid((0, 0, hc), (hrx, hry, hrz), "head", e1=E, e2=E, nu=88, nv=60)
+    # visor: rounded-rectangle glass bulging out of the face, framed by a raised white rim with a dark seam
+    fa, fb, fz, fp = hrx * S["visor_w"], hrz * S["visor_h"], hc + hrz * S["visor_z"], 3.2
+    bulge = S.get("visor_bulge", 0.012)
 
-    # ---- ear lenses: white rim, glowing ring, lavender lens; aligned to the side of the head
+    def vis_rr(x, z):
+        return (abs(x / fa) ** fp + abs((z - fz) / fb) ** fp) ** (1 / fp)
+
+    def vis_lift(x, z):
+        rr = min(1.0, vis_rr(x, z))
+        return 0.002 + bulge * (1 - rr * rr) ** 0.6
+
+    def ring_rows(r0, r1, nr, lift_fn, nt=120):
+        rows = []
+        for i in range(nr + 1):
+            rr = r0 + (r1 - r0) * i / nr
+            row = []
+            for j in range(nt + 1):
+                th = 2 * PI * j / nt
+                cx, cz = math.cos(th), math.sin(th)
+                k = (abs(cx) ** fp + abs(cz) ** fp) ** (-1 / fp)
+                x, z = fa * rr * k * cx, fz + fb * rr * k * cz
+                row.append((x, head_y(x, z, lift_fn(rr, x, z)), z))
+            rows.append(row)
+        return rows
+
+    vi.grid(ring_rows(0.0, 1.0, 20, lambda rr, x, z: vis_lift(x, z)), "head")
+    dk.grid(ring_rows(0.995, 1.035, 2, lambda rr, x, z: 0.0026), "head")                                 # dark seam
+    sh.grid(ring_rows(1.03, 1.16, 8, lambda rr, x, z: 0.001 + 0.006 * math.sin(PI * (rr - 1.03) / 0.13) ** 0.7), "head")  # raised rim
+    project = lambda x, z: head_y(x, z, vis_lift(x, z) + 0.0018)  # face LEDs ride just above the glass
+    face_y = head_y(0, hc, vis_lift(0, hc) + 0.0018)
+
+    # ---- headphone pods: white housing, silver ring, white cap, thin cyan light ring where they meet the head
     for sx in (1, -1):
-        x0, z0 = sx * hrx * 0.975, hc - hrz * 0.02
+        x0, z0 = sx * hrx * 0.93, hc - hrz * 0.04
         ax = (sx, 0, 0)
-        sh.torus((x0 + sx * 0.012, 0, z0), hrz * 0.27, 0.017, "head", axis=ax, nu=64, nv=14)
-        gl.torus((x0 + sx * 0.022, 0, z0), hrz * 0.215, 0.0085, "head", axis=ax, nu=64, nv=10)
-        ac.ellipsoid((x0 + sx * 0.012, 0, z0), (hrz * 0.2, hrz * 0.2, 0.016), "head", e1=0.75, axis=ax, nu=48, nv=12)
+        R = hrz * 0.36
+        sh.ellipsoid((x0 + sx * 0.022, 0.004, z0), (R, R, 0.034), "head", e1=0.5, axis=ax, nu=56, nv=14)          # housing
+        gl.torus((x0 + sx * 0.006, 0.004, z0), R * 0.985, 0.0042, "head", axis=ax, nu=96, nv=8)                   # cyan ring
+        ac.torus((x0 + sx * 0.056, 0.004, z0), R * 0.62, 0.0085, "head", axis=ax, nu=72, nv=12)                  # silver ring
+        s2.ellipsoid((x0 + sx * 0.052, 0.004, z0), (R * 0.56, R * 0.56, 0.008), "head", e1=0.55, axis=ax, nu=56, nv=10)  # recessed cap
+        sh.ellipsoid((x0 + sx * 0.056, 0.004, z0), (R * 0.36, R * 0.36, 0.008), "head", e1=0.6, axis=ax, nu=48, nv=10)  # centre button
 
-    # ---- neck: glowing ring the head floats on
-    dk.ellipsoid((0, 0, L["neck"] + 0.012), (0.075, 0.07, 0.02), "neck", e1=0.6, nu=40, nv=8)
-    gl.torus((0, 0, L["neck"] + 0.016), 0.088, 0.0115, "neck", nu=72, nv=10)
+    # ---- neck: dark collar with a soft cyan light ring the head sits on
+    dk.ellipsoid((0, 0, L["neck"] + 0.028), (0.112, 0.098, 0.02), "neck", e1=0.6, nu=64, nv=10)
+    gl.torus((0, 0, L["neck"] + 0.034), 0.108, 0.0062, "neck", nu=96, nv=10)
 
-    # ---- body: one seamless rounded shape (soft shoulders, slight belly), smooth weights pelvis -> spine -> chest
-    bt, bb = L["neck"] + 0.02, L["pel"] - 0.065
+    # ---- body: one seamless pear shape (narrow shoulders, round belly), smooth weights pelvis -> spine -> chest
+    tx = S["torso"][0]
+    bt, bb = L["neck"] + 0.034, L["pel"] - 0.07
     body_w = lambda co: (lambda w1, w2: {"chest": w2, "spine": w1 - w2, "pelvis": 1 - w1})(
         sstep(L["pel"], L["spine"] + 0.02, co.z), sstep(L["spine"] + 0.02, L["chest"], co.z))
-    tx = S["torso"][0]
-    sh.lathe((0, 0, bt), (0, 0, bb), profile([(0, tx * 0.86), (0.25, tx * 0.97), (0.6, tx), (1, tx * 0.94)], 0.16, 0.22),
-             body_w, nu=72, nv=48, cross=(1.0, 0.88))
-    gl.ellipsoid((0, -S["torso"][0] * 0.88 * 0.985, bb + 0.06), (0.03, 0.0042, 0.0036), "pelvis", e1=0.5, axis=(0, -1, 0), nu=24, nv=8)
+    cross_y = 0.88
+    body_r = profile([(0, tx * 0.8), (0.3, tx * 0.9), (0.66, tx * 1.0), (1, tx * 0.93)], 0.14, 0.26)
+    sh.lathe((0, 0, bt), (0, 0, bb), body_r, body_w, nu=80, nv=48, cross=(1.0, cross_y))
 
-    # ---- arms: shoulder -> tapered arm -> rounded mitten as ONE lathe, smooth upperarm/forearm/hand weights
+    def body_front(z, lift=0.0, back=False):
+        t = (bt - z) / (bt - bb)
+        return (1 if back else -1) * (body_r(t) * cross_y + lift)
+
+    # chest emblem (also the default logo spot): silver bezel, light ring, pale disc
+    ze = S.get("logo_z", L["chest"])
+    ye = body_front(ze)
+    ac.torus((0, ye - 0.004, ze), 0.024, 0.0042, "chest", axis=(0, -1, 0), nu=64, nv=10)
+    gl.torus((0, ye - 0.0055, ze), 0.0175, 0.0018, "chest", axis=(0, -1, 0), nu=56, nv=6)
+    s2.ellipsoid((0, ye - 0.002, ze), (0.02, 0.02, 0.004), "chest", e1=0.6, axis=(0, -1, 0), nu=40, nv=8)
+    # back service port: dark rounded square with a silver lens
+    zb = L["chest"] - 0.01
+    yb = body_front(zb, back=True)
+    dk.ellipsoid((0, yb + 0.002, zb), (0.03, 0.026, 0.006), "chest", e1=0.35, e2=0.4, axis=(0, 1, 0), nu=40, nv=8)
+    ac.ellipsoid((0, yb + 0.006, zb), (0.009, 0.009, 0.004), "chest", e1=0.6, axis=(0, 1, 0), nu=24, nv=8)
+
+    # ---- arms: shoulder -> chunky tapered arm -> wrist as ONE lathe (smooth upperarm/forearm/hand weights) + real hand
+    hs = S.get("hand_scale", 1.0)
     for sx in (1, -1):
         side = "L" if sx == 1 else "R"
         shx, shz, elb, wr = L["sh_x"] * sx, L["sh_z"], L["elbow"], L["wrist"]
-        top, bot = shz + 0.05, wr - 0.085
+        top, bot = shz + 0.052, wr - 0.012
         ln = top - bot
+
         def arm_w(co, elb=elb, wr=wr, side=side):
             w_up = sstep(elb - 0.03, elb + 0.03, co.z)
-            w_hand = 1 - sstep(wr - 0.02, wr + 0.02, co.z)
+            w_hand = 1 - sstep(wr - 0.012, wr + 0.012, co.z)
             return {f"upperarm_{side}": w_up * (1 - w_hand), f"forearm_{side}": (1 - w_up) * (1 - w_hand), f"hand_{side}": w_hand}
-        r0 = S["limb_r"] * 1.25
-        prof = profile([(0, r0), (0.35, r0 * 0.95), (0.62, r0 * 0.8), (0.8, r0 * 0.95), (1, r0 * 0.9)], r0 / ln * 0.9, r0 / ln * 1.1)
-        sh.lathe((shx - sx * 0.01, 0, top), (shx + sx * 0.012, 0, bot), prof, arm_w, nu=48, nv=44, cross=(1.0, 0.94),
-                 bend=(sx * 0.012, 0, 0))
-        # glowing ring on the mitten tip (shows when waving)
-        tipz = bot + 0.012
-        gl.torus((shx + sx * 0.012, 0, tipz), 0.024, 0.0042, f"hand_{side}", axis=(0, 0, -1), nu=40, nv=8)
-        ac.ellipsoid((shx + sx * 0.012, 0, tipz + 0.002), (0.022, 0.022, 0.004), f"hand_{side}", e1=0.6, axis=(0, 0, -1), nu=28, nv=6)
+        r0 = S["limb_r"] * 1.22
+        prof = profile([(0, r0), (0.35, r0 * 0.97), (0.7, r0 * 0.86), (1, r0 * 0.8)], r0 / ln * 0.9, r0 / ln * 0.5)
+        sh.lathe((shx - sx * 0.012, 0, top), (shx + sx * 0.004, 0, bot), prof, arm_w, nu=48, nv=36, cross=(1.0, 0.94),
+                 bend=(sx * 0.01, 0, 0))
+        # hand: soft palm block + chubby two-segment fingers on the real finger bones (they curl, wave and point)
+        hx = shx + sx * 0.004
+        sh.ellipsoid((hx, -0.004, wr - 0.03 * hs / 0.55), (0.028, 0.036, 0.034), f"hand_{side}", e1=0.75, e2=0.8, nu=32, nv=16)
+        for fname in FINGERS:
+            for seg in (1, 2):
+                b = bones[bone_index[f"finger_{fname}_{seg}_{side}"]]
+                p0, p1 = b[2], b[3]
+                d = p1 - p0
+                rad = (0.0118 if fname == "thumb" else 0.0102) * (1.0 if seg == 1 else 0.96)
+                sh.capsule(p0 - d * 0.15, p1 + d * (0.25 if seg == 2 else 0.05), rad, rad * (0.92 if seg == 2 else 1.0), b[0], nu=14, nv=8)
 
-    # ---- legs: short seamless stubs (thigh/shin smooth weights) + rounded shoes with a glowing toe dash
+    # ---- legs: short thick stubs (thigh/shin smooth weights) + rounded shoes
     for sx in (1, -1):
         side = "L" if sx == 1 else "R"
         hx = L["hip_x"] * sx
-        hip, knee, ank = L["hip"], L["knee"], L["ankle"]
-        top, bot = L["pel"] - 0.01, ank - 0.01
+        knee, ank = L["knee"], L["ankle"]
+        top, bot = L["pel"] - 0.01, ank - 0.012
         ln = top - bot
-        r = S["limb_r"] * 1.12
-        sh.lathe((hx, 0, top), (hx, 0, bot), profile([(0, r), (0.5, r * 0.96), (1, r * 0.98)], 0.3, r / ln * 0.6),
-                 blend(f"thigh_{side}", f"shin_{side}", knee, 0.025), nu=44, nv=28)
+        r = S["limb_r"] * 1.28
+        sh.lathe((hx, 0, top), (hx, 0, bot), profile([(0, r), (0.55, r * 0.95), (1, r * 0.93)], 0.3, r / ln * 0.5),
+                 blend(f"thigh_{side}", f"shin_{side}", knee, 0.025), nu=48, nv=24)
         fl = S.get("foot", 1.0)
-        sh.ellipsoid((hx, -0.018, 0.038), (r * 1.18, 0.082 * fl / 0.8, 0.04), f"foot_{side}", e1=0.72, e2=0.82, nu=56, nv=26)
-        gl.ellipsoid((hx, -0.018 - 0.082 * fl / 0.8 * 0.985, 0.028), (0.03, 0.0042, 0.004), f"toe_{side}", e1=0.5, axis=(0, -1, 0), nu=24, nv=8)
+        sh.ellipsoid((hx, -0.022, 0.036), (r * 1.12, 0.09 * fl / 0.8, 0.038), f"foot_{side}", e1=0.68, e2=0.82, nu=48, nv=20)
+        s2.ellipsoid((hx, -0.022, 0.006), (r * 1.08, 0.086 * fl / 0.8, 0.008), f"foot_{side}", e1=0.5, e2=0.82, nu=56, nv=8)  # sole
     return face_y, project
 
 # --------------------------------------------------------------------------- main build
@@ -735,6 +778,8 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
     bpy.context.view_layer.objects.active = arm_obj
     arm_obj.select_set(True)
     bones = build_bones(S, L)
+    if S.get("logo_z"):
+        arm_obj["logo_height"] = S["logo_z"]
     if S.get("default_emotion"):
         arm_obj["default_emotion"] = S["default_emotion"]
     bpy.ops.object.mode_set(mode="EDIT")
@@ -779,7 +824,7 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         mats["face"].use_backface_culling = False
         if True:  # deep glossy black faceplate (less env reflection than the generic visor)
             bpy.data.materials.remove(mats["visor"])
-            mats["visor"] = make_material("Mat_Visor", (0.0, 0.0, 0.004), 0.0, 0.16, 0.0)
+            mats["visor"] = make_material("Mat_Visor", (0.0, 0.0, 0.004), 0.0, 0.1 if mascot else 0.16, 0.0)
     keys = ("shell", "shell2", "dark", "accent", "visor", "glow") + (("uniform",) if humanoid else ())
     parts = {k: Part("Body_" + k.capitalize() if k not in ("visor", "glow") else k.capitalize(), bone_index) for k in keys}
     P = parts
