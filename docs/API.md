@@ -13,8 +13,8 @@ scene.add(robot.root);                                               // or viewe
 
 | Call | Behaviour |
 |---|---|
-| `playAnimation(name, opts?)` → `AnimationHandle` | Plays a clip (`greeting`, `happy`, `sad`, `surprised`, `error`, `goodbye`, `pointing`, `thinking`, `listening`, `nod`, `shake`, `bow`) or `"walking"` (continuous forward) / `"turning"` (+90°). `opts`: `speed`, `priority`, `loop`, `fadeIn`, `fadeOut`, `channels`, `force`, `emotion: false` (don't set the accompanying emotion). Returns `{accepted, rejected, finished: Promise}`. Throws `Unknown animation` with the valid list. |
-| `stopAnimation(name?)` | Fade out one clip, or everything above the idle base. |
+| `playAnimation(name, opts?)` → `AnimationHandle` | Plays a clip (`greeting`, `happy`, `sad`, `surprised`, `error`, `goodbye`, `pointing`, `thinking`, `listening`, `nod`, `shake`, `bow`) or `"walking"` (continuous forward) / `"turning"` (+90°). `opts`: `speed`, `priority`, `loop`, `fadeIn`, `fadeOut`, `channels`, `force`, `emotion: false` (don't set the accompanying emotion). Returns `{accepted, rejected, finished: Promise}`; `finished` resolves when every accepted channel ends or is stopped (for `"walking"`: when the walk arrives/stops). Throws `Unknown animation` with the valid list. |
+| `stopAnimation(name?)` | Fade out one clip, or everything above the idle base; pending `finished` handles resolve. Naming `"walking"`/`"turning"` stops locomotion instead. |
 | `listAnimations()` | Names. |
 | `setSpeed(multiplier)` | Global playback speed. |
 | `setState("idle"\|"listening"\|"thinking"\|"speaking"\|"error")` | Coordinated bundle: pose clip + emotion + gaze + glow colour. `error` is locked for 1.8 s unless `stateMachine.set(s,{force:true})`; entering listening/thinking interrupts speech (barge-in); speech start/end drive `speaking`/`idle` automatically. `stateMachine.userTarget` sets where the eyes go. |
@@ -27,7 +27,7 @@ scene.add(robot.root);                                               // or viewe
 | `setEyeExpression(name\|null)` | Eyes only: `neutral, happy, sad, angry, surprised, curious, squint, wide, closed`. `null` returns control to the emotion. |
 | `setMouthOpen(0..1\|null)` | Direct jaw/mouth opening (independent of speech); `null` releases. |
 | `blink("both"\|"left"\|"right")`; `face.autoBlink` | Manual blink or **wink** one eye; random auto-blink (2–6 s, occasional double). |
-| `setGlow(color?, boost?)`, `setEyeColor(color)` | Recolour emissive materials at runtime. |
+| `setGlow(color?, boost?)`, `setEyeColor(color)`, `setEyeGlow(on)` | Recolour emissive materials at runtime. Eye/ring emission is **off by default**; `setEyeGlow(true)` enables it, and custom colours persist while it is off. `eyeGlowPulse` (default `true`) pulses with speech; set it to `false` for a steady glow. |
 
 ## Gaze
 
@@ -89,7 +89,7 @@ s.pushPCM16(chunk); s.pushVisemes(events?); s.end();
 ## Events, status, lifecycle
 
 `robot.on(type, fn)` / `once` / `off`, wildcard `"*"`. Types: `animation:start|end|blocked`, `emotion`, `state`, `speech:start|end`, `walk:start|end`, `command`, `error`.
-`getStatus()` returns state, emotion, animations per channel, speaking, lipsync weights, gaze angles, locomotion, overrides. `after(seconds, fn)` / `delay(seconds)` run on robot time. `dispose()` releases geometries, materials, skeletons, mixer and the audio context.
+`getStatus()` returns state, emotion, animations per channel, speaking, lipsync weights, gaze angles, locomotion, overrides. `after(seconds, fn)` runs on robot time and returns a cancel function; `delay(seconds)` returns a promise. `walk:end` fires after the feet settle and reports `arrived: false` when the walk was stopped/interrupted. `dispose()` releases geometries, materials, skeletons, mixer and the audio context.
 
 ## Not implemented / caveats (no façade)
 

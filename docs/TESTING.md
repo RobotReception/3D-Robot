@@ -5,13 +5,15 @@ Run `npm test` for engine, bridge lifecycle, concurrent Studio loading, and remo
 For browser checks, run `npx playwright-core install chromium` once, then `npm run test:e2e`. The runner detects installed Chromium, Chrome or Edge on Windows; set `CHROME_PATH` to override. Browser screenshots and the JSON report are written to `tests/e2e/out/`, leaving documentation images untouched. CI installs Chromium and runs this suite after building.
 
 ```bash
-npm test               # 111 tests, ~4 s: headless engine tests on the real shipped GLBs (all three styles)
+npm test               # 117 tests, ~4 s: headless engine tests on the real shipped GLBs (all five styles)
 npm run test:e2e       # 28 browser tests: builds, serves dist/, drives the Studio in Chromium (WebGL)
                        # CHROME_PATH=/path/to/chrome to choose the browser; SKIP_BUILD=1 to reuse dist/
 npm run typecheck && npm run build
+npm run check:package  # library build + resolution of ., ./viewer, ./react
+npm pack --dry-run     # inspect the files that would be published
 ```
 
-Results of the last run: **111/111 unit-integration tests** and **28/28 browser tests** passed. Screenshots written by the E2E run are in `tests/e2e/out/screenshots/`.
+Results of the last run: **117/117 unit-integration tests** and **28/28 browser tests** passed. Screenshots written by the E2E run are in `tests/e2e/out/screenshots/`.
 
 ## What the unit/integration tests prove (Node, real GLB, no mocks)
 
@@ -19,12 +21,12 @@ Results of the last run: **111/111 unit-integration tests** and **28/28 browser 
 |---|---|---|
 | `model.test.ts` (×5 styles) | 15 | every model is fully skinned, has the 40 bones and all 43 morph targets, ≤ 12 draw calls, < 70 k triangles, PBR materials, correct left/right orientation, straight legs |
 | `rig.test.ts` | 5 | joint-space maths, limits + mirroring, same semantic command ⇒ mirrored hand positions, sign conventions checked with forward kinematics (shoulder raises forward, abduction outward, head yaw/pitch) |
-| `animation.test.ts` | 12 | all required states exist; **every clip moves bones, stays inside joint limits, no NaN**; one-shots return to idle; no pose pops while cross-fading; priority conflict rejection + `animation:blocked`; speak + point + look in parallel; paused loops resume; replay/restart bug regression |
+| `animation.test.ts` | 14 | all required states exist; **every clip moves bones, stays inside joint limits, no NaN**; one-shots return to idle; no pose pops while cross-fading; priority conflict rejection + `animation:blocked`; speak + point + look in parallel; paused loops resume; replay/restart bug regression; stopping/clearing resolves `finished`; interrupted motion timers are cancelled |
 | `face.test.ts` | 6 | each emotion drives its characteristic morphs; smooth transitions; eye-expression override only affects eyes; blink (manual + auto); `setMouthOpen`; influences always in 0…1 |
 | `lipsync.test.ts` | 24 | EN/AR text → visemes (harakat, shadda, implicit vowels, mixed text), timing fit, Azure/Rhubarb/word/character adapters, FFT, formant recovery, **audio analysis at 16/22.05/44.1 kHz** (≥ 90 % labels correct, median onset error ≤ 60 ms), silence/noise → closed mouth, hybrid alignment, offset control, loudness gating, streaming events, live frame source, full EN/AR speech flow, peak timing |
-| `locomotion.test.ts` | 10 | arrives within 7 cm and resolves; **stance feet slide < 4 mm per frame**; ankles reach IK targets (< 25 mm) and never sink; pelvis bob < 7 cm, lateral < 6 cm; turn accuracy < 3° by stepping; turns before walking when the goal is behind; squat-bounce keeps feet planted (< 1 cm drift) and knees flex; works for friendly/futuristic/concierge/mascot (different leg lengths) |
+| `locomotion.test.ts` | 11 | arrives within 7 cm and resolves; **stance feet slide < 4 mm per frame**; ankles reach IK targets (< 25 mm) and never sink; pelvis bob < 7 cm, lateral < 6 cm; turn accuracy < 3° by stepping; turns before walking when the goal is behind; squat-bounce keeps feet planted (< 1 cm drift) and knees flex; works for friendly/futuristic/concierge/mascot (different leg lengths); `walk:end` waits for settling and distinguishes arrival from interruption |
 | `motion.test.ts` | 7 | JSON motions: compile/register/play moves real bones, events, precise validation errors, limit clamping + loop warnings, built-in protection, **every built-in exports to JSON and re-compiles within 12° of the original**, JSON commands |
-| `api.test.ts` | 23 | every Robot API call changes the expected bones/morphs: `moveHead`, `moveArm`, `moveJoint`, limits/clamping, fingers, `lookAt` (point and moving object), `setEyeDirection` (per eye), wink, `moveTorso`, shrug, `pointAt` IK (fingertip within 12 cm of a reachable target; straight arm when out of reach), `resetPose`; state machine (bundles, error lock, barge-in); JSON commands (validation, sequence, parallel, wait, speak), transport bridge; **engine update = 0.19 ms/frame**; dispose |
+| `api.test.ts` | 26 | every Robot API call changes the expected bones/morphs: `moveHead`, `moveArm`, `moveJoint`, limits/clamping, fingers, `lookAt` (point and moving object), `setEyeDirection` (per eye), wink, `moveTorso`, shrug, `pointAt` IK (fingertip within 12 cm of a reachable target; straight arm when out of reach), `resetPose`; opt-in steady/pulsing glow and stable eye colour; state machine (bundles, error lock, single-transition barge-in); late audio load after speech stop cannot play; JSON commands (validation, sequence, parallel, wait, speak), transport bridge; **engine update = 0.19 ms/frame**; dispose |
 | `bridge.test.ts` | 2 | detach ignores late commands, including legacy transports; closing a connection cancels a pending reconnect |
 | `remote-api.test.ts` | 4 | HTTP/WebSocket authentication, reply isolation by robot, immediate settlement on disconnect, body/command/timeout limits |
 | `studio.test.ts` | 3 | concurrent model loads keep only the latest request; a failed replacement keeps the current robot; a load finishing after unmount is disposed |

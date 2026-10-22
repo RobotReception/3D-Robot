@@ -25,9 +25,10 @@ a **Control Studio** to test everything.
 ```bash
 npm install
 npm run dev            # Control Studio at http://localhost:5173
-npm test               # 111 unit/integration tests (headless, real GLB models)
+npm test               # 117 unit/integration tests (headless, real GLB models)
 npm run test:e2e       # 28 browser tests (Chromium + WebGL): Studio, audio lip-sync, WebSocket, R3F
-npm run build          # type-check + production build (dist/)
+npm run build          # type-check + Studio build (dist/)
+npm run build:lib      # publishable ESM package + declarations (dist-lib/)
 ```
 
 Rebuilding the character (optional — the GLBs are committed):
@@ -39,8 +40,17 @@ npm run model:build            # blender/build_robot.py -> assets/models/*.blend
 
 ## Use it in your app (no UI dependency)
 
+The library is prepared as an ESM package. Until it is published, build it with `npm run build:lib`
+and install the resulting tarball (`npm pack`); inside this repository you can import from `./src` directly.
+
+```bash
+npm install robot-avatar-engine three
+# Only for the React Three Fiber adapter:
+npm install react react-dom @react-three/fiber
+```
+
 ```ts
-import { RobotAvatar, RobotViewer } from "./src";
+import { RobotAvatar, RobotViewer } from "robot-avatar-engine";
 
 const viewer = new RobotViewer(document.getElementById("stage")!, { quality: "high" });
 const robot = await RobotAvatar.load("/models/robot_premium.glb");
@@ -60,7 +70,16 @@ robot.resetPose();
 
 Every call above is wired to real bones / morph targets and covered by tests ([docs/API.md](docs/API.md)).
 Remote control: JSON commands ([docs/COMMANDS.md](docs/COMMANDS.md)) over WebSocket (`attachBridge`, `connectWebSocket`).
-Works with plain three.js ([examples/minimal.html](examples/minimal.html)) and React Three Fiber ([examples/r3f](examples/r3f/main.tsx)).
+
+| Import | Contents | Runtime peers |
+|---|---|---|
+| `robot-avatar-engine` | engine + optional viewer | `three` |
+| `robot-avatar-engine/viewer` | `RobotViewer` only | `three` |
+| `robot-avatar-engine/react` | `<Robot />` R3F adapter | `react`, `react-dom`, `@react-three/fiber`, `three` |
+
+React/R3F are optional peers; importing the root or `/viewer` never loads them. The package ships TypeScript
+declarations but not the demo GLBs — serve a compatible model from your app. Works with plain three.js
+([examples/minimal.html](examples/minimal.html)) and React Three Fiber ([examples/r3f](examples/r3f/main.tsx)).
 
 ## What's inside
 

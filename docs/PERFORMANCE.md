@@ -4,10 +4,10 @@
 
 | Item | Value | How measured |
 |---|---|---|
-| Triangles | 29,272 per pass for the v1 styles, **74,232 for Concierge** (the renderer counter doubles with the shadow pass) | geometry index counts; `renderer.info` |
+| Triangles | 29,272 per pass for the friendly/futuristic/premium styles, **66,536 for Mascot**, **79,528 for Concierge** (the renderer counter doubles with the shadow pass) | geometry index counts; `renderer.info` |
 | Draw calls | 11 skinned meshes per pass | `renderer.info.render.calls` = 27 in the full Studio scene (main + shadow + floor + grid + ring) |
 | Bones / morph targets | 40 / 43 | `tests/model.test.ts` |
-| File size | 390 KB (Meshopt) vs 2.4 MB raw | `npm run model:build` |
+| File size | 1,187–1,294 KB (Meshopt) vs 2,211–2,304 KB raw for the v1 styles; concierge 1,851 KB vs 4,546 KB raw | `npm run model:build` |
 | Engine CPU per frame | **0.19 ms** (Node, walking + speaking + gaze + IK + morphs) / **0.4–0.5 ms** inside Chromium while the page is also software-rendering | `tests/api.test.ts` perf test; Developer panel |
 | Memory | geometry count constant (27) across 6 style switches | E2E "style switching ... does not leak" |
 
@@ -23,7 +23,7 @@ The 60 FPS target is therefore limited only by the GPU: the CPU side uses ~1–3
 | Env-map intensity / tone mapping | 0.65 / ACES | 0.65 / ACES | 0.65 / ACES |
 | Grid | hidden by default (toggle via `showGrid`) | hidden by default (toggle via `showGrid`) | hidden by default (toggle via `showGrid`) |
 
-Switching recompiles materials once; verified in E2E (pixel ratio and shadow flag change).
+Switching recompiles materials once; verified in E2E (pixel ratio and shadow flag change). Bloom is an explicit `viewer.setBloom(true/false)` choice and is preserved across quality changes.
 
 ## Resource handling
 

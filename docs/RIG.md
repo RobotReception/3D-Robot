@@ -110,4 +110,4 @@ Limits are enforced for manual control (`moveJoint`, `moveArm`, `moveHead`), IK 
 ## Meshes & materials (draw calls)
 
 Meshes (all skinned): Body_Accent, Body_Dark, Body_Shell, Body_Shell2, Brow_L, Brow_R, Eye_L, Eye_R, Glow, Mouth, Visor — 11 draw calls per pass.
-Materials (PBR metal/rough, no textures): Mat_Accent, Mat_Dark, Mat_Face, Mat_Glow, Mat_Shell, Mat_Shell2, Mat_Visor. `Mat_Glow` (chest/ears/antenna) and `Mat_Face` (eyes/mouth/brows) are emissive; `robot.setGlow(color)` and `robot.setEyeColor(color)` recolor them at runtime.
+Materials (PBR metal/rough): Mat_Accent, Mat_Dark, Mat_Face, Mat_Glow, Mat_Shell, Mat_Shell2, Mat_Visor. The shell materials carry a baked texture set (base colour + AO, normal, metallic/roughness, emissive); the face materials stay untextured. `Mat_Glow` (chest/ears/antenna) and `Mat_Face` (eyes/mouth/brows) are emissive, but emission is **opt-in** (`eyeGlow`, default off). `robot.setGlow(color)` and `robot.setEyeColor(color)` store runtime colours; `setEyeGlow(true)` enables emission and `eyeGlowPulse` selects pulsing or steady light.
