@@ -51,11 +51,12 @@ STYLES = {
     ),
     # Realistic humanoid receptionist: human proportions (1.76 m), panelled white shell, navy uniform, glowing ring joints.
     "concierge": dict(
-        kind="humanoid", head_r=0.13, head_sq=(0.88, 0.96, 1.12), e_head=0.85, torso=(0.19, 0.115, 0.17),
-        e_box=0.75, thigh=0.40, shin=0.40, limb_r=0.045, upper=0.30, fore=0.27, chest_h=0.30, hip_x=0.10, foot=1.35,
-        shell=(0.97, 0.97, 0.98), shell2=(0.80, 0.82, 0.86), dark=(0.015, 0.016, 0.02), accent=(0.78, 0.8, 0.84),
-        uniform=(0.035, 0.06, 0.15), glow=(0.0, 0.32, 1.0), metal=0.0, rough=0.2, coat=1.0, eye=(0.058, 0.066), eye_p=2.1,
-        mouth_w=0.04,
+        kind="humanoid", head_r=0.168, head_sq=(1.0, 0.94, 0.95), e_head=0.72, torso=(0.19, 0.122, 0.17),
+        e_box=0.75, thigh=0.37, shin=0.37, limb_r=0.047, upper=0.27, fore=0.25, chest_h=0.27, hip_x=0.098, foot=1.3, sh_x=0.238,
+        shell=(0.95, 0.955, 0.965), shell2=(0.72, 0.74, 0.78), dark=(0.028, 0.031, 0.04), accent=(0.86, 0.66, 0.38),
+        uniform=(0.007, 0.014, 0.05), glow=(0.0, 0.62, 1.0), metal=0.0, rough=0.22, coat=1.0, eye=(0.05, 0.06), eye_p=2.1,
+        mouth_w=0.05, eye_x_k=0.34, eye_z_k=0.1, mouth_z_k=0.36, mouth_rest_curve=0.6, hide_brows=True,
+        glow_strength=1.8, face_strength=1.25,
     ),
     # Chibi mascot: huge head, small egg body, stubby limbs, glowing rings (cute assistant for kiosks/apps).
     "mascot": dict(
@@ -428,103 +429,134 @@ def spherical_front_y(zc, b, c, e1, taper, z):
 
 
 def humanoid_parts(P, S, L, bones, bone_index):
-    """Detailed receptionist robot. Returns the face-plane y. Every piece is weighted to ONE bone (rigid, no stretching)."""
+    """Receptionist robot (matches the concierge reference sheet): rounded helmet with a big black visor and cyan
+    headphone pods, navy vest over a white shirt + tie, gold medallion, charcoal joints, white shell limbs, shoes with a
+    cyan sole line. Returns the face-plane y. Every piece is weighted to ONE bone (rigid, no stretching)."""
     hr, sq = S["head_r"], S["head_sq"]
     hc = L["head_c"]
     hrx, hry, hrz = hr * sq[0], hr * sq[1], hr * sq[2]
     tx, ty, _ = S["torso"]
     sh, un, dk, gl, ac, vi = P["shell"], P["uniform"], P["dark"], P["glow"], P["accent"], P["visor"]
     s2 = P["shell2"]
+    PI = math.pi
 
     def ring(center, R, axis, bone, r=0.0045, disc=True):
-        """glowing ring joint marker: glow torus + black recessed disc"""
+        """glowing ring joint marker: glow torus + charcoal recessed disc"""
         gl.torus(center, R, r, bone, axis=axis, nu=40, nv=8)
         if disc:
             dk.ellipsoid(center, (R * 0.92, R * 0.92, 0.004), bone, e1=0.5, axis=axis, nu=28, nv=6)
 
-    def strip(center, half, bone, axis=(0, 0, 1)):
-        gl.ellipsoid(center, (half[0] * 1.25, half[1] * 1.15, half[2]), bone, e1=0.5, e2=0.9, axis=axis, nu=14, nv=10)
-
-    # ---- head: smooth helmet, large glossy faceplate, headphone-style ear caps with glowing rings
-    sh.ellipsoid((0, 0, hc), (hrx, hry, hrz), "head", e1=S["e_head"], e2=S["e_head"], nu=56, nv=32)
-    vis_c = (0, -hry * 0.72, hc + hrz * 0.01)
-    vis_depth = hry * 0.34
-    vi.ellipsoid(vis_c, (hrx * 0.9, hrz * 0.80, vis_depth), "head", e1=0.32, e2=0.62, axis=(0, -1, 0), nu=56, nv=26)
+    # ---- head: rounded helmet, large glossy black visor, headphone pods with cyan rings
+    sh.ellipsoid((0, 0, hc), (hrx, hry, hrz), "head", e1=S["e_head"], e2=S["e_head"], nu=64, nv=40)
+    vis_c = (0, -hry * 0.70, hc - hrz * 0.02)
+    vis_depth = hry * 0.36
+    vi.ellipsoid(vis_c, (hrx * 0.84, hrz * 0.74, vis_depth), "head", e1=0.34, e2=0.5, axis=(0, -1, 0), nu=64, nv=28)
     face_y = vis_c[1] - vis_depth - 0.0035
-    gl.ellipsoid((0, -hry * 0.30, hc + hrz * 0.985), (0.036, 0.012, 0.0035), "head", e1=0.6, nu=20, nv=8)  # top light slit
+    dk.ellipsoid((0, -hry * 0.12, hc + hrz * 0.985), (0.034, 0.014, 0.006), "head", e1=0.5, nu=20, nv=8)       # top sensor slot
+    gl.ellipsoid((0, hry * 0.985, hc + hrz * 0.12), (0.045, 0.004, 0.0065), "head", e1=0.5, axis=(0, 1, 0), nu=24, nv=8)  # back light bar
     for sx in (1, -1):
-        ec = (sx * hrx * 0.985, 0.006, hc - 0.004)
-        sh.ellipsoid(ec, (hrz * 0.44, hrz * 0.44, 0.024), "head", e1=0.45, axis=(sx, 0, 0), nu=36, nv=14)
-        ring((sx * (hrx * 0.985 + 0.024), 0.006, hc - 0.004), hrz * 0.31, (sx, 0, 0), "head", r=0.0055)
-        dk.ellipsoid((sx * (hrx * 0.985 + 0.02), 0.006, hc - 0.004), (hrz * 0.2, hrz * 0.2, 0.006), "head", e1=0.5, axis=(sx, 0, 0), nu=20, nv=6)
-    # neck: black column with two ribs
-    dk.ellipsoid((0, 0, L["neck"] + 0.03), (0.046, 0.046, 0.055), "neck", e1=0.55, nu=24, nv=10)
-    for dz in (0.0, 0.035):
-        s2.torus((0, 0, L["neck"] + dz), 0.044, 0.006, "neck", nu=28, nv=6)
+        ax = (sx, 0, 0)
+        x0 = sx * hrx * 0.95
+        sh.ellipsoid((x0, 0.008, hc), (hrz * 0.46, hrz * 0.46, 0.03), "head", e1=0.5, axis=ax, nu=48, nv=14)          # pod housing
+        dk.ellipsoid((x0 + sx * 0.026, 0.008, hc), (hrz * 0.36, hrz * 0.36, 0.012), "head", e1=0.5, axis=ax, nu=40, nv=8)
+        gl.torus((x0 + sx * 0.035, 0.008, hc), hrz * 0.27, 0.0055, "head", axis=ax, nu=48, nv=8)                      # cyan ring
+        sh.ellipsoid((x0 + sx * 0.035, 0.008, hc), (hrz * 0.18, hrz * 0.18, 0.007), "head", e1=0.6, axis=ax, nu=32, nv=8)
+    # neck: charcoal column with two ribs
+    dk.ellipsoid((0, 0, L["neck"] + 0.03), (0.044, 0.044, 0.06), "neck", e1=0.55, nu=24, nv=10)
+    for dz in (0.012, 0.045):
+        s2.torus((0, 0, L["neck"] + dz), 0.043, 0.005, "neck", nu=28, nv=6)
 
-    # ---- torso: V-shaped white shell, navy uniform panels, collar, tie, emblem, name tag
+    # ---- torso: navy vest (the shell itself), white shirt V + collar, tie, gold medallion, name tag, cyan piping
     ch_c = L["chest"] + S["chest_h"] * 0.5
     ch_c_r = S["chest_h"] * 0.62 + 0.03
-    tp = (0.70, 1.0)
-    sh.ellipsoid((0, 0, ch_c), (tx, ty, ch_c_r), "chest", e1=0.72, e2=0.82, taper=tp, nu=56, nv=30)
-    # navy uniform = armour patches lifted 1.2 % off the same surface parametrisation (two-tone suit, like real panelling)
-    PI = math.pi
+    tp = (0.7, 1.0)
+    E1, E2 = 0.62, 0.62
+
+    def tpt(u, v, lift):
+        cv, sv = math.cos(v), math.sin(v)
+        f = (tp[0] + (tp[1] - tp[0]) * (sv * 0.5 + 0.5)) * lift
+        return (tx * f * spow(cv, E1) * spow(math.cos(u), E2), ty * f * spow(cv, E1) * spow(math.sin(u), E2),
+                ch_c + ch_c_r * lift * spow(sv, E1))
+
+    def fpt(x, z, lift, back=False):
+        """point on the torso surface at height z and lateral offset x (front, or back if `back`)"""
+        sv = max(-0.999, min(0.999, (z - ch_c) / ch_c_r))
+        sv = math.copysign(abs(sv) ** (1 / E1), sv)
+        cv = math.sqrt(max(1e-6, 1 - sv * sv))
+        f = tp[0] + (tp[1] - tp[0]) * (sv * 0.5 + 0.5)
+        cu = max(-0.999, min(0.999, x / (tx * f * cv ** E1)))
+        cu = math.copysign(abs(cu) ** (1 / E2), cu)
+        u = math.acos(cu) * (1 if back else -1)
+        return tpt(u, math.asin(sv), lift)
+
+    def band(part, half, z0, z1, lift, nu=12, nv=16, back=False):
+        """surface strip on the torso centre line from z0 to z1; half(t) = half-width in metres at t in 0..1"""
+        rows = []
+        for i in range(nv + 1):
+            tt = i / nv
+            hw = half(tt)
+            rows.append([fpt(-hw + 2 * hw * j / nu, z0 + (z1 - z0) * tt, lift, back) for j in range(nu + 1)])
+        part.grid(rows, "chest")
+
+    un.ellipsoid((0, 0, ch_c), (tx, ty, ch_c_r), "chest", e1=E1, e2=E2, taper=tp, nu=72, nv=36)
+    FRONT = -PI / 2
+    zs0, zs1 = ch_c - 0.085, L["neck"] - 0.012
+    band(sh, lambda t: 0.006 + 0.085 * t ** 1.1, zs0, zs1, 1.012, nu=16, nv=24)                         # white shirt V
+    band(un, lambda t: 0.002 + 0.019 * min(1.0, t * 6) - 0.008 * t, zs0 + 0.01, zs1 - 0.03, 1.022, nu=6, nv=20)  # tie (pointed tip)
+    zk = zs1 - 0.022
+    yk = fpt(0, zk, 1.0)[1]
+    un.ellipsoid((0, yk - 0.008, zk), (0.019, 0.012, 0.016), "chest", e1=0.6, axis=(0, -1, 0), nu=16, nv=10)     # knot
+    gl.grid([[tpt(2 * PI * j / 96, v, 1.016) for j in range(97)] for v in (-1.06, -1.02, -0.98)], "chest")  # cyan hem piping
+    band(gl, lambda t: 0.006, ch_c - 0.07, ch_c + 0.1, 1.012, nu=4, nv=10, back=True)                    # back light slit
+    for sx in (1, -1):  # shirt collar wings
+        sh.ellipsoid((sx * 0.03, -0.05, L["neck"] - 0.008), (0.032, 0.028, 0.009), "chest", e1=0.6, axis=(sx * 0.5, -0.6, 0.6), nu=16, nv=8)
+    sh.torus((0, -0.002, L["neck"] + 0.006), 0.052, 0.01, "chest", nu=32, nv=8)                          # collar band
+    # shoulder yoke (navy) so the vest reads continuous to the shoulder caps
+    un.ellipsoid((0, 0.004, L["neck"] - 0.05), (L["sh_x"] * 0.78, ty * 0.62, 0.04), "chest", e1=0.6, e2=0.8, nu=40, nv=14)
+    # gold medallion on a thin lanyard
+    zm = ch_c + 0.005
+    ym = spherical_front_y(ch_c, ty, ch_c_r, E1, tp, zm)
+    md = (0, ym - 0.028, zm)
+    ac.torus(md, 0.027, 0.0068, "chest", axis=(0, -1, 0), nu=48, nv=10)
+    vi.ellipsoid(md, (0.022, 0.022, 0.006), "chest", e1=0.6, axis=(0, -1, 0), nu=32, nv=8)
     for sx in (1, -1):
-        c0 = 0.0 if sx == 1 else PI
-        # side flank panels: sector around the +/-X axis, lower 70 % of the chest
-        un.patch((0, 0, ch_c), (tx, ty, ch_c_r), "chest", 0.72, 0.82, taper=tp, u=(c0 - 0.62, c0 + 0.62), v=(-0.95, 0.55), lift=1.014, nu=20, nv=16)
-    # lower front band
-    un.patch((0, 0, ch_c), (tx, ty, ch_c_r), "chest", 0.72, 0.82, taper=tp, u=(-PI / 2 - 0.62, -PI / 2 + 0.62), v=(-1.05, -0.62), lift=1.014, nu=24, nv=6)
-    # tie: narrow centre strip from the collar to the belt line, plus knot
-    un.patch((0, 0, ch_c), (tx, ty, ch_c_r), "chest", 0.72, 0.82, taper=tp, u=(-PI / 2 - 0.14, -PI / 2 + 0.14), v=(-0.62, 1.0), lift=1.02, nu=8, nv=18)
-    zk = L["neck"] - 0.03
-    un.ellipsoid((0, spherical_front_y(ch_c, ty, ch_c_r, 0.72, tp, zk) - 0.012, zk), (0.017, 0.014, 0.014), "chest", e1=0.6, axis=(0, -1, 0), nu=16, nv=10)  # knot
-    # shoulder yoke so the shoulder line is continuous (no bare black bar)
-    sh.ellipsoid((0, 0.005, L["neck"] - 0.052), (L["sh_x"] * 0.8, ty * 0.6, 0.042), "chest", e1=0.6, e2=0.8, nu=40, nv=14)
-    for sx in (1, -1):  # collar wings
-        sh.ellipsoid((sx * 0.034, -0.052, L["neck"] - 0.012), (0.034, 0.03, 0.01), "chest", e1=0.6, axis=(sx * 0.5, -0.5, 0.7), nu=16, nv=8)
-    sh.torus((0, -0.004, L["neck"] + 0.004), 0.058, 0.012, "chest", nu=32, nv=8)                                   # collar band
-    ze = ch_c + 0.075
-    ye = spherical_front_y(ch_c, ty, ch_c_r, 0.72, tp, ze)
-    ring((0.075, ye - 0.004, ze), 0.02, (0, -1, 0), "chest", r=0.0035)                                              # emblem (generic)
-    ac.ellipsoid((-0.07, spherical_front_y(ch_c, ty, ch_c_r, 0.72, tp, ze) - 0.003, ze), (0.032, 0.011, 0.0035), "chest", e1=0.5,
-                 axis=(0, -1, 0), nu=16, nv=8)                                                                      # name tag
-    s2.ellipsoid((0, ty * 0.82, ch_c + 0.02), (tx * 0.6, ch_c_r * 0.62, 0.045), "chest", e1=0.6, e2=0.6, axis=(0, 1, 0), nu=28, nv=12)  # back plate
-    # waist (black under-suit) and pelvis
-    dk.ellipsoid((0, 0, L["spine"] + 0.035), (tx * 0.5, ty * 0.66, 0.08), "spine", e1=0.55, nu=28, nv=10)
-    for dz in (0.0, 0.05):
-        s2.torus((0, 0, L["spine"] + dz), tx * 0.46, 0.006, "spine", nu=32, nv=6)
-    sh.ellipsoid((0, 0, L["pel"] + 0.005), (tx * 0.88, ty * 0.98, 0.10), "pelvis", e1=0.72, e2=0.8, nu=40, nv=18)
-    un.torus((0, 0, L["pel"] + 0.075), tx * 0.74, 0.013, "pelvis", nu=40, nv=8)                                      # belt
+        p_top = Vector((sx * 0.045, -0.06, L["neck"] - 0.02))
+        p_mid = Vector((sx * 0.03, ym - 0.022, (zm + L["neck"]) / 2 - 0.01))
+        p_bot = Vector((sx * 0.012, md[1] + 0.002, md[2] + 0.026))
+        ac.capsule(p_top, p_mid, 0.0026, 0.0026, "chest", nu=8, nv=6)
+        ac.capsule(p_mid, p_bot, 0.0026, 0.0026, "chest", nu=8, nv=6)
+    nt = tpt(FRONT + 0.62, 0.42, 1.0)
+    s2.ellipsoid((nt[0], nt[1] - 0.004, nt[2]), (0.026, 0.004, 0.009), "chest", e1=0.4, e2=0.5,
+                 nu=16, nv=8, axis=(0.25, -1, 0))                                                         # name tag
+    # waist (charcoal under-suit) and white pelvis shell
+    dk.ellipsoid((0, 0, L["spine"] + 0.03), (tx * 0.55, ty * 0.82, 0.085), "spine", e1=0.55, nu=32, nv=10)
+    for dz in (0.0, 0.045):
+        s2.torus((0, 0, L["spine"] + dz), tx * 0.5, 0.005, "spine", nu=36, nv=6)
+    sh.ellipsoid((0, 0, L["pel"] - 0.005), (tx * 0.86, ty * 0.96, 0.095), "pelvis", e1=0.7, e2=0.8, nu=44, nv=18)
+    for sx in (1, -1):  # charcoal groin seams
+        dk.capsule((sx * 0.012, -ty * 0.93, L["pel"] - 0.07), (sx * 0.075, -ty * 0.82, L["pel"] + 0.03), 0.004, 0.004, "pelvis", nu=8, nv=6)
 
     r = S["limb_r"]
     for side, sx in (("L", 1), ("R", -1)):
         shx, shz = L["sh_x"] * sx, L["sh_z"]
         elb, wr = L["elbow"], L["wrist"]
-        # -- shoulder
-        sh.capsule((sx * tx * 0.3, 0, shz - 0.01), (shx, 0, shz - 0.01), r * 0.95, r, f"clavicle_{side}")
-        dk.ellipsoid((shx, 0, shz - 0.006), (0.052, 0.052, 0.052), f"upperarm_{side}", nu=24, nv=14)
-        sh.ellipsoid((shx + sx * 0.004, 0, shz + 0.012), (0.062, 0.06, 0.066), f"upperarm_{side}", e1=0.8, e2=0.8, nu=32, nv=18)
-        ring((shx + sx * 0.058, 0, shz + 0.004), 0.026, (sx, 0, 0), f"upperarm_{side}")
+        # -- shoulder: charcoal cap like a pauldron
+        un.capsule((sx * tx * 0.3, 0, shz - 0.008), (shx, 0, shz - 0.008), r * 0.95, r, f"clavicle_{side}")
+        dk.ellipsoid((shx + sx * 0.006, 0, shz + 0.006), (0.072, 0.068, 0.07), f"upperarm_{side}", e1=0.85, e2=0.9, nu=36, nv=20)
         # -- upper arm
-        for zz in (shz - 0.10, elb + 0.07):
-            dk.torus((shx, 0, zz), 0.0405, 0.0022, f"upperarm_{side}", nu=28, nv=5)
-        sh.capsule((shx, 0, shz - 0.055), (shx, 0, elb + 0.03), 0.047, 0.037, f"upperarm_{side}", nu=24, nv=14)
-        strip((shx + sx * 0.040, 0.004, (shz + elb) / 2 - 0.01), (0.0045, 0.011, 0.075), f"upperarm_{side}")
+        dk.torus((shx, 0, shz - 0.075), 0.041, 0.0025, f"upperarm_{side}", nu=28, nv=5)
+        sh.capsule((shx, 0, shz - 0.045), (shx, 0, elb + 0.03), 0.048, 0.04, f"upperarm_{side}", nu=28, nv=14)
         # -- elbow
-        dk.ellipsoid((shx, 0, elb), (0.042, 0.042, 0.042), f"forearm_{side}", nu=22, nv=12)
-        ring((shx + sx * 0.039, 0, elb), 0.02, (sx, 0, 0), f"forearm_{side}", r=0.004)
-        # -- forearm
-        for zz in (elb - 0.09, wr + 0.11):
-            dk.torus((shx, 0, zz), 0.0345, 0.002, f"forearm_{side}", nu=28, nv=5)
-        sh.capsule((shx, 0, elb - 0.025), (shx, 0, wr + 0.035), 0.042, 0.031, f"forearm_{side}", nu=24, nv=14)
-        strip((shx + sx * 0.034, 0.006, (elb + wr) / 2), (0.004, 0.01, 0.07), f"forearm_{side}")
-        dk.torus((shx, 0, wr + 0.04), 0.033, 0.008, f"forearm_{side}", nu=28, nv=8)
-        gl.torus((shx, 0, wr + 0.052), 0.0305, 0.002, f"forearm_{side}", nu=32, nv=6)
-        # -- hand
-        dk.ellipsoid((shx, 0, wr + 0.004), (0.03, 0.03, 0.022), f"hand_{side}", e1=0.6, nu=20, nv=10)
+        dk.ellipsoid((shx, 0, elb), (0.043, 0.043, 0.043), f"forearm_{side}", nu=24, nv=12)
+        # -- forearm (flares at the elbow like the reference)
+        sh.capsule((shx, 0, elb - 0.03), (shx, 0, wr + 0.035), 0.045, 0.032, f"forearm_{side}", nu=28, nv=14)
+        dk.torus((shx, 0, elb - 0.085), 0.039, 0.002, f"forearm_{side}", nu=28, nv=5)
+        dk.torus((shx, 0, wr + 0.035), 0.032, 0.008, f"forearm_{side}", nu=28, nv=8)
+        gl.torus((shx, 0, wr + 0.047), 0.0305, 0.0022, f"forearm_{side}", nu=32, nv=6)
+        # -- hand: white back, charcoal palm and knuckles
+        dk.ellipsoid((shx, 0, wr + 0.004), (0.029, 0.029, 0.022), f"hand_{side}", e1=0.6, nu=20, nv=10)
         sh.ellipsoid((shx, 0, wr - 0.052), (0.027, 0.047, 0.05), f"hand_{side}", e1=0.7, e2=0.8, nu=28, nv=14)
-        dk.ellipsoid((shx - sx * 0.019, 0, wr - 0.048), (0.012, 0.036, 0.038), f"hand_{side}", e1=0.6, nu=18, nv=8)   # inner palm pad (black)
+        dk.ellipsoid((shx - sx * 0.019, 0, wr - 0.048), (0.012, 0.037, 0.039), f"hand_{side}", e1=0.6, nu=18, nv=8)
         for fname in FINGERS:
             for seg in (1, 2):
                 b = bones[bone_index[f"finger_{fname}_{seg}_{side}"]]
@@ -533,39 +565,33 @@ def humanoid_parts(P, S, L, bones, bone_index):
                 if fname == "thumb":
                     rad *= 1.15
                 d = p1 - p0
-                sh.capsule(p0 + d * 0.06, p1 + d * (0.14 if seg == 2 else -0.04), rad, rad * (0.85 if seg == 2 else 1.0), b[0], nu=14, nv=8)
-                if seg == 1:
-                    dk.ellipsoid(p0, (rad * 1.05,) * 3, b[0], nu=10, nv=6)           # black knuckle
-                else:
-                    dk.ellipsoid(p0, (rad * 0.95,) * 3, b[0], nu=10, nv=6)           # black mid joint
+                (sh if seg == 1 else dk).capsule(p0 + d * 0.06, p1 + d * (0.14 if seg == 2 else -0.04), rad,
+                                                 rad * (0.85 if seg == 2 else 1.0), b[0], nu=14, nv=8)
+                dk.ellipsoid(p0, (rad * (1.05 if seg == 1 else 0.95),) * 3, b[0], nu=10, nv=6)
         # -- leg
         hx = L["hip_x"] * sx
         hip, knee, ank = L["hip"], L["knee"], L["ankle"]
-        dk.ellipsoid((hx, 0, hip), (0.068, 0.068, 0.068), f"thigh_{side}", nu=26, nv=14)
-        ring((hx + sx * 0.064, 0, hip - 0.004), 0.03, (sx, 0, 0), f"thigh_{side}", r=0.005)
-        for zz in (hip - 0.13, knee + 0.11):
-            dk.torus((hx, 0, zz), 0.064, 0.0025, f"thigh_{side}", nu=32, nv=5)
-        sh.capsule((hx, 0, hip - 0.04), (hx, 0, knee + 0.04), 0.074, 0.055, f"thigh_{side}", nu=28, nv=16)
-        sh.ellipsoid((hx + sx * 0.012, 0, hip + 0.015), (0.074, 0.072, 0.06), f"thigh_{side}", e1=0.8, e2=0.8, nu=28, nv=14)  # hip guard
-        strip((hx + sx * 0.067, 0.004, (hip + knee) / 2 + 0.02), (0.0045, 0.011, 0.11), f"thigh_{side}")
-        dk.ellipsoid((hx, 0, knee), (0.056, 0.056, 0.056), f"shin_{side}", nu=24, nv=12)
-        ring((hx + sx * 0.052, 0, knee), 0.027, (sx, 0, 0), f"shin_{side}", r=0.0048)
-        sh.ellipsoid((hx, -0.046, knee + 0.012), (0.045, 0.034, 0.058), f"shin_{side}", e1=0.8, e2=0.8, nu=28, nv=14)            # kneecap
-        for zz in (knee - 0.09, ank + 0.14):
-            dk.torus((hx, 0, zz), 0.047, 0.0022, f"shin_{side}", nu=28, nv=5)
-        sh.capsule((hx, 0, knee - 0.045), (hx, 0, ank + 0.055), 0.054, 0.039, f"shin_{side}", nu=24, nv=14)
-        sh.ellipsoid((hx, 0.03, knee - 0.12), (0.046, 0.044, 0.11), f"shin_{side}", e1=0.8, e2=0.8, nu=24, nv=12)                # calf
-        strip((hx + sx * 0.047, 0.003, (knee + ank) / 2 + 0.02), (0.0042, 0.01, 0.1), f"shin_{side}")
-        dk.torus((hx, 0, ank + 0.075), 0.04, 0.008, f"shin_{side}", nu=28, nv=8)
-        dk.ellipsoid((hx, 0, ank), (0.044, 0.044, 0.044), f"foot_{side}", nu=20, nv=10)
-        ring((hx + sx * 0.04, 0, ank), 0.02, (sx, 0, 0), f"foot_{side}", r=0.0045)
+        dk.ellipsoid((hx, 0, hip), (0.066, 0.066, 0.066), f"thigh_{side}", nu=26, nv=14)
+        sh.capsule((hx, 0, hip - 0.04), (hx, 0, knee + 0.045), 0.08, 0.06, f"thigh_{side}", nu=32, nv=16)
+        dk.torus((hx, 0, knee + 0.1), 0.062, 0.0025, f"thigh_{side}", nu=32, nv=5)
+        # knee: charcoal joint with a big rounded pad
+        dk.ellipsoid((hx, 0, knee), (0.055, 0.055, 0.055), f"shin_{side}", nu=24, nv=12)
+        dk.ellipsoid((hx, -0.04, knee + 0.008), (0.05, 0.034, 0.058), f"shin_{side}", e1=0.75, e2=0.8, nu=32, nv=16)
+        sh.capsule((hx, 0, knee - 0.05), (hx, 0, ank + 0.06), 0.06, 0.043, f"shin_{side}", nu=28, nv=14)
+        sh.ellipsoid((hx, 0.028, knee - 0.12), (0.048, 0.046, 0.11), f"shin_{side}", e1=0.8, e2=0.8, nu=24, nv=12)   # calf
+        dk.torus((hx, 0, knee - 0.085), 0.049, 0.0022, f"shin_{side}", nu=28, nv=5)
+        ac.torus((hx, 0, ank + 0.07), 0.041, 0.0035, f"shin_{side}", nu=32, nv=6)                                 # gold ankle trim
+        dk.ellipsoid((hx, 0, ank + 0.02), (0.042, 0.042, 0.042), f"foot_{side}", nu=20, nv=10)
+        # shoe: chunky white upper, toe cap, charcoal sole with a wrap-around cyan line
         fl = S.get("foot", 1.0)
-        sh.ellipsoid((hx, -0.05 * fl, 0.062), (0.057, 0.115 * fl, 0.05), f"foot_{side}", e1=0.7, e2=0.8, nu=32, nv=16)           # shoe upper
-        sh.ellipsoid((hx, -0.165 * fl, 0.044), (0.052, 0.062 * fl, 0.036), f"toe_{side}", e1=0.7, e2=0.8, nu=24, nv=12)         # toe cap
-        dk.ellipsoid((hx, -0.07 * fl, 0.02), (0.061, 0.145 * fl, 0.021), f"foot_{side}", e1=0.5, e2=0.8, nu=32, nv=10)           # sole
-        for dx in (-0.058, 0.058):
-            gl.ellipsoid((hx + dx, -0.07 * fl, 0.024), (0.0028, 0.115 * fl, 0.0042), f"foot_{side}", e1=0.5, nu=12, nv=8)       # sole glow
-        gl.ellipsoid((hx, -0.205 * fl, 0.026), (0.048, 0.0028, 0.0042), f"toe_{side}", e1=0.5, nu=14, nv=8)
+        sh.ellipsoid((hx, -0.045 * fl, 0.064), (0.06, 0.118 * fl, 0.054), f"foot_{side}", e1=0.65, e2=0.8, nu=40, nv=18)
+        sh.ellipsoid((hx, -0.15 * fl, 0.048), (0.056, 0.07 * fl, 0.04), f"toe_{side}", e1=0.65, e2=0.8, nu=32, nv=14)
+        dk.ellipsoid((hx, -0.07 * fl, 0.017), (0.064, 0.152 * fl, 0.018), f"foot_{side}", e1=0.45, e2=0.8, nu=40, nv=10)
+        ring_pts = []
+        for j in range(65):
+            u = 2 * PI * j / 64
+            ring_pts.append((hx + 0.0655 * spow(math.cos(u), 0.8), -0.07 * fl + 0.1545 * fl * spow(math.sin(u), 0.8)))
+        gl.grid([[(x, y, 0.029) for x, y in ring_pts], [(x, y, 0.036) for x, y in ring_pts]], f"foot_{side}")
     return face_y
 
 
@@ -738,13 +764,13 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         for k in ("dark", "accent", "glow", "face"):  # replace the generic ones (avoid ".001" duplicate names the engine looks up)
             bpy.data.materials.remove(mats[k])
         if humanoid:
-            mats["uniform"] = make_material("Mat_Uniform", S["uniform"], 0.1, 0.34, 0.9)
+            mats["uniform"] = make_material("Mat_Uniform", S["uniform"], 0.05, 0.42, 0.35)
         mats["dark"] = make_material("Mat_Dark", S["dark"], 0.2, 0.28, 0.8)
         mats["accent"] = make_material("Mat_Accent", S["accent"], 0.9, 0.25, 0.4)
         mats["glow"] = make_material("Mat_Glow", (0.02, 0.02, 0.025), 0.0, 0.4, 0.0, S["glow"], S.get("glow_strength", 1.7))
         mats["face"] = make_material("Mat_Face", (0.02, 0.02, 0.025), 0.0, 0.5, 0.0, S["glow"], S.get("face_strength", 1.5))
         mats["face"].use_backface_culling = False
-        if mascot:  # deep glossy black faceplate (less env reflection than the generic visor)
+        if True:  # deep glossy black faceplate (less env reflection than the generic visor)
             bpy.data.materials.remove(mats["visor"])
             mats["visor"] = make_material("Mat_Visor", (0.0, 0.0, 0.004), 0.0, 0.16, 0.0)
     keys = ("shell", "shell2", "dark", "accent", "visor", "glow") + (("uniform",) if humanoid else ())
@@ -874,10 +900,10 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         face_objs.append(o)
 
     mw = W
-    mouth_base = mouth_shape(0.0001, thick=0.0001) if S.get("hide_idle_face") else mouth_shape(mw)
+    mouth_base = mouth_shape(0.0001, thick=0.0001) if S.get("hide_idle_face") else mouth_shape(mw, curve=S.get("mouth_rest_curve", 0.0))
     shapes = {
         "mouthOpen": mouth_shape(mw * 0.9, 0.85),
-        "viseme_sil": mouth_shape(0.0001, thick=0.0001) if S.get("hide_idle_face") else mouth_shape(mw),
+        "viseme_sil": mouth_shape(0.0001, thick=0.0001) if S.get("hide_idle_face") else mouth_shape(mw, curve=S.get("mouth_rest_curve", 0.0)),
         "viseme_PP": mouth_shape(mw * 0.62, 0.0, thick=0.011),
         "viseme_FF": mouth_shape(mw * 0.82, 0.22, curve=-0.1, up=0.3),
         "viseme_TH": mouth_shape(mw * 0.8, 0.38, up=0.35),
@@ -904,14 +930,14 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
     for side, sx in (("L", 1), ("R", -1)):
         inner = -sx
         bc = (sx * ex, ez + eh_ * 1.45)
-        mk = lambda **k: brow_shape(bw, inner=inner, **k)
+        mk = lambda **k: brow_shape(0.0002 if S.get("hide_brows") else bw, inner=inner, **({"th": 0.0001} if S.get("hide_brows") else {}), **k)
         shapes = {
             "browUp": mk(dz=0.017),
             "browDown": mk(dz=-0.012),
             "browInnerUp": mk(inner_dz=0.022, outer_dz=-0.004),
             "browInnerDown": mk(inner_dz=-0.02, outer_dz=0.006),
         }
-        face_objs.append(make_face_mesh(f"Brow_{side}", None, arm_obj, "head", bone_index, bone_names, brow_shape(0.0002, th=0.0001, inner=inner) if S.get("hide_idle_face") else mk(), face_y,
+        face_objs.append(make_face_mesh(f"Brow_{side}", None, arm_obj, "head", bone_index, bone_names, brow_shape(0.0002, th=0.0001, inner=inner) if S.get("hide_idle_face") or S.get("hide_brows") else mk(), face_y,
                                         bc, mats["face"], shapes, 7, 2, project=project))
 
     # ---- export
