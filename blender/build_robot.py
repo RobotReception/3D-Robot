@@ -29,9 +29,9 @@ STYLES = {
     "friendly": dict(
         head_r=0.255, head_sq=(1.0, 0.9, 0.88), e_head=0.78, torso=(0.175, 0.135, 0.17),
         e_box=0.72, thigh=0.215, shin=0.215, limb_r=0.054, upper=0.19, fore=0.19, chest_h=0.2,
-        shell=(0.93, 0.92, 0.88), shell2=(0.78, 0.80, 0.82), dark=(0.07, 0.075, 0.09),
-        accent=(0.98, 0.52, 0.16), glow=(0.04, 0.62, 1.0), metal=0.15, rough=0.32, coat=0.6,
-        eye=(0.115, 0.135), mouth_w=0.07,
+        shell=(0.95, 0.95, 0.96), shell2=(0.80, 0.82, 0.85), dark=(0.06, 0.065, 0.08),
+        accent=(0.42, 0.46, 0.54), glow=(0.04, 0.62, 1.0), metal=0.15, rough=0.28, coat=0.8,
+        eye=(0.115, 0.135), mouth_w=0.07, chest="panel",
     ),
     # Angular, tall, neon.
     "futuristic": dict(
@@ -821,10 +821,19 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         # ---- torso
         P["shell"].ellipsoid((0, 0, L["chest"] + S["chest_h"] * 0.5), (tx, ty, S["chest_h"] * 0.62 + 0.03), "chest",
                              e1=eb_, e2=eb_ + 0.1, nu=40, nv=22)
+        if S.get("chest") == "panel":
+            # clean chest: low-profile rounded panel flush on the shell + a slim status light (no round core)
+            cz = L["chest"] + S["chest_h"] * 0.55
+            P["shell2"].ellipsoid((0, -ty * 0.9, cz), (tx * 0.62, S["chest_h"] * 0.36, 0.02), "chest", e1=0.35, e2=0.45,
+                                  axis=(0, -1, 0), nu=40, nv=10)
+            P["shell"].ellipsoid((0, -ty * 0.9 - 0.006, cz), (tx * 0.58, S["chest_h"] * 0.33, 0.02), "chest", e1=0.35,
+                                 e2=0.45, axis=(0, -1, 0), nu=40, nv=10)
+            P["glow"].ellipsoid((0, -ty * 0.9 - 0.024, cz + S["chest_h"] * 0.2), (0.03, 0.004, 0.0035), "chest", e1=0.5,
+                                axis=(0, -1, 0), nu=20, nv=8)
         # chest plate (accent) + glowing core
-        P["accent"].ellipsoid((0, -ty * 0.86, L["chest"] + S["chest_h"] * 0.52),
+        if S.get("chest") != "panel": P["accent"].ellipsoid((0, -ty * 0.86, L["chest"] + S["chest_h"] * 0.52),
                               (tx * 0.52, tx * 0.52, 0.03), "chest", e1=0.5, axis=(0, -1, 0), nu=32, nv=8)
-        P["glow"].ellipsoid((0, -ty * 0.86 - 0.027, L["chest"] + S["chest_h"] * 0.52),
+        if S.get("chest") != "panel": P["glow"].ellipsoid((0, -ty * 0.86 - 0.027, L["chest"] + S["chest_h"] * 0.52),
                             (tx * 0.26, tx * 0.26, 0.014), "chest", e1=0.6, axis=(0, -1, 0), nu=28, nv=8)
         # back unit
         P["shell2"].ellipsoid((0, ty * 0.85, L["chest"] + S["chest_h"] * 0.55), (tx * 0.62, S["chest_h"] * 0.42, 0.05),
