@@ -506,7 +506,6 @@ def humanoid_parts(P, S, L, bones, bone_index):
     zk = zs1 - 0.022
     yk = fpt(0, zk, 1.0)[1]
     un.ellipsoid((0, yk - 0.008, zk), (0.019, 0.012, 0.016), "chest", e1=0.6, axis=(0, -1, 0), nu=16, nv=10)     # knot
-    gl.grid([[tpt(2 * PI * j / 96, v, 1.016) for j in range(97)] for v in (-1.06, -1.02, -0.98)], "chest")  # cyan hem piping
     band(gl, lambda t: 0.006, ch_c - 0.07, ch_c + 0.1, 1.012, nu=4, nv=10, back=True)                    # back light slit
     for sx in (1, -1):  # shirt collar wings
         sh.ellipsoid((sx * 0.03, -0.05, L["neck"] - 0.008), (0.032, 0.028, 0.009), "chest", e1=0.6, axis=(sx * 0.5, -0.6, 0.6), nu=16, nv=8)
@@ -528,24 +527,20 @@ def humanoid_parts(P, S, L, bones, bone_index):
     nt = tpt(FRONT + 0.62, 0.42, 1.0)
     s2.ellipsoid((nt[0], nt[1] - 0.004, nt[2]), (0.026, 0.004, 0.009), "chest", e1=0.4, e2=0.5,
                  nu=16, nv=8, axis=(0.25, -1, 0))                                                         # name tag
-    # waist (charcoal under-suit) and white pelvis shell
-    # one seamless sculpted waist: flares into the vest, pinches, flares into the hips (no stacked rings)
+    # one seamless waist in the vest fabric: flows from the chest, gently narrows, tucks into the hips (no rings, no glow)
     wt, wb = ch_c - ch_c_r * 0.55, L["pel"] + 0.03
 
     def waist_r(t):
         if t <= 0 or t >= 1:
             return 0.0
-        r_ = tx * (0.56 - 0.1 * math.sin(math.pi * min(1.0, t * 1.15)))
+        r_ = tx * (0.6 - 0.06 * math.sin(math.pi * min(1.0, t * 1.1)))
         cap = 0.08
         if t < cap:
             r_ *= math.sqrt(1 - ((cap - t) / cap) ** 2)
         if t > 1 - cap:
             r_ *= math.sqrt(1 - ((t - 1 + cap) / cap) ** 2)
         return r_
-    dk.lathe((0, 0, wt), (0, 0, wb), waist_r, "spine", nu=64, nv=36, cross=(1.0, ty / tx * 1.05))
-    wr_ = tx * 0.478
-    gl.grid([[(wr_ * math.cos(2 * PI * j / 96), wr_ * ty / tx * 1.05 * math.sin(2 * PI * j / 96), z) for j in range(97)]
-             for z in ((wt + wb) / 2 - 0.004, (wt + wb) / 2 + 0.004)], "spine")                              # thin cyan waist line
+    un.lathe((0, 0, wt), (0, 0, wb), waist_r, "spine", nu=64, nv=36, cross=(1.0, ty / tx * 1.05))
     sh.ellipsoid((0, 0, L["pel"] - 0.005), (tx * 0.86, ty * 0.96, 0.095), "pelvis", e1=0.7, e2=0.8, nu=44, nv=18)
     for sx in (1, -1):  # charcoal groin seams
         dk.capsule((sx * 0.012, -ty * 0.93, L["pel"] - 0.07), (sx * 0.075, -ty * 0.82, L["pel"] + 0.03), 0.004, 0.004, "pelvis", nu=8, nv=6)
