@@ -2,6 +2,10 @@ export type Lang = "en" | "ar";
 
 const AR: Record<string, string> = {
   "Robot Avatar Studio": "استوديو الروبوت التفاعلي",
+  Brand: "الهوية", "Brand presets": "هويات جاهزة", "Al-Razi University": "جامعة الرازي", Midnight: "كحلي ليلي", Graphite: "جرافيت",
+  Emerald: "زمردي", Original: "الأصلي", Colors: "الألوان", Body: "الهيكل", Panels: "الألواح", Uniform: "الزي", Trims: "الحواف",
+  Screen: "الشاشة", Eyes: "العيون", Lights: "الإضاءة", "Chest logo": "شعار الصدر", Size: "الحجم", Center: "المنتصف",
+  "Left chest": "يسار الصدر", "Remove logo": "إزالة الشعار", "PNG with a transparent background looks best.": "يفضّل صورة PNG بخلفية شفافة.",
   Motion: "الحركات", Joints: "المفاصل", Audio: "الصوت", Developer: "المطوّر",
   Style: "النمط", Camera: "الكاميرا", Quality: "الجودة", Background: "الخلفية",
   Full: "كامل", Upper: "الجزء العلوي", Face: "الوجه", Side: "جانبي", Back: "خلفي",

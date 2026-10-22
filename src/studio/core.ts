@@ -1,10 +1,18 @@
 import * as THREE from "three";
-import { RobotAvatar } from "../engine/RobotAvatar";
+import { RobotAvatar, type ColorPart } from "../engine/RobotAvatar";
 import { RobotViewer, type BackgroundPreset, type CameraPreset, type QualityLevel } from "../viewer/RobotViewer";
 import { JOINT_DEFS, REQUIRED_BONES } from "../engine/rig";
 
 export type Style = "friendly" | "futuristic" | "premium" | "concierge" | "mascot";
 export type GazeMode = "free" | "cursor" | "camera";
+
+export interface BrandState {
+  preset: string | null;
+  colors: Partial<Record<ColorPart, string>>;
+  logo: string | null;
+  logoSize: number;
+  placement: "auto" | "center" | "left";
+}
 
 export interface LogEntry {
   t: number;
@@ -31,6 +39,7 @@ export class StudioCore {
   private cleanup: (() => void)[] = [];
   private raycaster = new THREE.Raycaster();
   listeners = new Set<() => void>();
+  brand: BrandState = { preset: null, colors: {}, logo: null, logoSize: 0.11, placement: "auto" };
   onBoneSelected?: (bone: string) => void;
 
   async init(container: HTMLElement) {
@@ -81,12 +90,28 @@ export class StudioCore {
     this.viewer.add(robot);
     this.applyGaze();
     (window as unknown as Record<string, unknown>).robot = robot;
+    await this.applyBrand(this.brand, true);
     this.emitChange();
   }
 
   pushLog(type: string, data: unknown) {
     this.log.push({ t: performance.now() / 1000, type, data });
     if (this.log.length > 200) this.log.splice(0, this.log.length - 200);
+  }
+
+  /** colours + chest logo; kept when switching styles */
+  async applyBrand(next: Partial<BrandState>, force = false) {
+    const prev = this.brand;
+    this.brand = { ...prev, ...next };
+    const b = this.brand;
+    const r = this.robot;
+    r.resetColors();
+    r.setColors(b.colors);
+    if (force || b.logo !== prev.logo || b.logoSize !== prev.logoSize || b.placement !== prev.placement || !r.hasLogo !== !b.logo) {
+      const size = b.placement === "left" || (b.placement === "auto" && r.parts.materials.has("Mat_Uniform")) ? b.logoSize * 0.68 : b.logoSize;
+      await r.setLogo(b.logo, { size, placement: b.placement === "auto" ? undefined : b.placement });
+    }
+    this.emitChange();
   }
 
   subscribe(fn: () => void) {

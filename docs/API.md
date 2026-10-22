@@ -97,3 +97,18 @@ s.pushPCM16(chunk); s.pushVisemes(events?); s.end();
 - IK covers legs and arms only; no full-body IK, no collision avoidance between arm and torso.
 - `moveArm` abduction is limited to 88° (the Euler decomposition); raise the arm further with `shoulder` (flexion up to 190°).
 - Browser `speechSynthesis` provides no audio data (see LIPSYNC.md).
+
+## Appearance: brand colours and chest logo
+
+```ts
+robot.setColors({ body: "#f5f7fa", uniform: "#0080c6", accent: "#f78a2c", eyes: "#7fd3ff" });
+robot.getColors();     // { body: "#f5f7fa", trim: "...", joints: "...", ... } — only the parts this model has
+robot.resetColors();   // back to the authored colours
+await robot.setLogo("/logos/alrazi.png", { size: 0.1, placement: "center" }); // or "left"; image URL, <img>, <canvas> or texture
+await robot.setLogo(null);  // remove
+```
+
+Parts: `body` (main shell), `trim` (secondary panels), `joints`, `accent` (metal trims / medallion), `uniform` (concierge vest),
+`visor` (face screen), `light` (LED rings and strips), `eyes` (face LEDs). The logo is placed on the chest surface in the
+rest pose and parented to the `chest` bone, so it follows every animation. The Control Studio exposes all of this in the
+**Brand** tab (presets incl. Al-Razi University, colour pickers, logo upload, size and placement).

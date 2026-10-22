@@ -40,6 +40,7 @@ export type RobotEvents = {
   "walk:end": { arrived: boolean };
   command: { cmd: string; ok: boolean; error?: string };
   error: { message: string };
+  appearance: { colors?: Record<string, string>; logo?: boolean };
 };
 
 export interface AnimationHandle extends PlayResult {
@@ -143,6 +144,9 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   private speechToken = 0;
   private glowBase = new Map<THREE.Material, { color: THREE.Color; intensity: number }>();
   private glowBoost = 0;
+  private baseColors = new Map<ColorPart, string>();
+  private logoAnchors: Record<LogoPlacement, { pos: THREE.Vector3; normal: THREE.Vector3 } | null> = { center: null, left: null };
+  private logo: THREE.Mesh | null = null;
 
   constructor(parts: RobotModelParts, opts: RobotAvatarOptions = {}) {
     super();
@@ -175,6 +179,10 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     for (const name of ["Mat_Glow", "Mat_Face"]) {
       const mat = parts.materials.get(name) as THREE.MeshStandardMaterial | undefined;
       if (mat) this.glowBase.set(mat, { color: mat.emissive.clone(), intensity: mat.emissiveIntensity });
+    }
+    for (const part of COLOR_PARTS) {
+      const c = this.getColor(part);
+      if (c) this.baseColors.set(part, c);
     }
     this.defaultEmotion = (opts.defaultEmotion ?? parts.defaultEmotion ?? "neutral") as EmotionName;
     this.face.setEmotion(this.defaultEmotion);
@@ -420,6 +428,122 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
   setEyeColor(color: THREE.ColorRepresentation) {
     for (const [mat] of this.glowBase) if (mat.name === "Mat_Face") (mat as THREE.MeshStandardMaterial).emissive.set(color);
+  }
+
+  // ================================================================ appearance (brand colours + chest logo)
+  /** Recolour parts of the robot at runtime, e.g. `setColors({ body: "#ffffff", uniform: "#0080c6", accent: "#f78a2c" })`.
+   *  Parts a model doesn't have (e.g. `uniform` on non-concierge styles) are ignored. */
+  setColors(colors: Partial<Record<ColorPart, THREE.ColorRepresentation>>) {
+    for (const [part, value] of Object.entries(colors) as [ColorPart, THREE.ColorRepresentation][]) {
+      if (value == null) continue;
+      const mat = this.parts.materials.get(COLOR_MATERIAL[part]) as THREE.MeshStandardMaterial | undefined;
+      if (!mat) continue;
+      if (part === "light" || part === "eyes") {
+        mat.emissive.set(value);
+        const base = this.glowBase.get(mat);
+        if (base) base.color.copy(mat.emissive);
+      } else mat.color.set(value);
+    }
+    this.emit("appearance", { colors: this.getColors() });
+  }
+  /** Current colours as "#rrggbb" (sRGB) for every part this model has. */
+  getColors(): Partial<Record<ColorPart, string>> {
+    const out: Partial<Record<ColorPart, string>> = {};
+    for (const part of COLOR_PARTS) {
+      const c = this.getColor(part);
+      if (c) out[part] = c;
+    }
+    return out;
+  }
+  /** Back to the colours the model was authored with. */
+  resetColors() {
+    this.setColors(Object.fromEntries(this.baseColors));
+  }
+  private getColor(part: ColorPart): string | null {
+    const mat = this.parts.materials.get(COLOR_MATERIAL[part]) as THREE.MeshStandardMaterial | undefined;
+    if (!mat) return null;
+    return "#" + (part === "light" || part === "eyes" ? mat.emissive : mat.color).getHexString();
+  }
+
+  /** Put a logo on the chest (an image URL, an <img>/<canvas>, or a texture); `null` removes it.
+   *  The logo follows the chest bone, so it moves with every animation. */
+  async setLogo(source: string | HTMLImageElement | HTMLCanvasElement | THREE.Texture | null, o: { size?: number; placement?: LogoPlacement } = {}) {
+    this.removeLogo();
+    if (!source) return;
+    let tex: THREE.Texture;
+    if (typeof source === "string") tex = await new THREE.TextureLoader().loadAsync(source);
+    else if ((source as THREE.Texture).isTexture) tex = source as THREE.Texture;
+    else tex = new THREE.CanvasTexture(source as HTMLCanvasElement);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    this.removeLogo(); // a newer call may have finished first
+    const placement = o.placement ?? (this.parts.materials.has("Mat_Uniform") ? "left" : "center");
+    const anchor = this.logoAnchor(placement);
+    if (!anchor) return;
+    const img = tex.image as { width?: number; height?: number } | undefined;
+    const aspect = img?.width && img?.height ? img.width / img.height : 1;
+    const size = o.size ?? (placement === "left" ? 0.075 : 0.1);
+    const w = aspect >= 1 ? size : size * aspect;
+    const h = aspect >= 1 ? size / aspect : size;
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.22, envMapIntensity: 0.25,
+      transparent: true, alphaTest: 0.04, roughness: 0.75, metalness: 0,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+    });
+    mat.name = "Mat_Logo";
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    mesh.name = "Logo";
+    // place in rest pose (model space), then re-parent under the chest bone keeping the world transform
+    const chest = this.joints.bone("chest");
+    this.restBones();
+    this.root.updateMatrixWorld(true);
+    mesh.position.copy(anchor.pos).addScaledVector(anchor.normal, 0.0025);
+    mesh.lookAt(anchor.pos.clone().addScaledVector(anchor.normal, 1));
+    this.model.add(mesh);
+    mesh.updateMatrixWorld(true);
+    chest.attach(mesh);
+    this.logo = mesh;
+    this.update(0);
+    this.emit("appearance", { logo: true });
+  }
+  removeLogo() {
+    if (!this.logo) return;
+    this.logo.removeFromParent();
+    this.logo.geometry.dispose();
+    const m = this.logo.material as THREE.MeshStandardMaterial;
+    m.map?.dispose();
+    m.dispose();
+    this.logo = null;
+  }
+  get hasLogo() {
+    return !!this.logo;
+  }
+  private restBones() {
+    for (const name of this.joints.names) {
+      const b = this.joints.bone(name);
+      b.position.copy(this.joints.restLocalPos(name));
+      b.quaternion.copy(this.joints.restLocalQuat(name));
+    }
+  }
+  /** Front surface point of the chest (model space) found by ray-casting the body meshes in the rest pose. */
+  private logoAnchor(placement: LogoPlacement) {
+    if (this.logoAnchors[placement]) return this.logoAnchors[placement];
+    this.restBones();
+    this.root.updateMatrixWorld(true);
+    const inv = this.root.matrixWorld.clone().invert();
+    const chest = this.joints.restWorldPos("chest");
+    const neck = this.joints.restWorldPos("neck");
+    const y = chest.y + (neck.y - chest.y) * (placement === "left" ? 0.62 : 0.55);
+    const x = placement === "left" ? Math.abs(this.joints.restWorldPos("eye_L").x) * 1.35 + 0.03 : 0;
+    const body = this.parts.skinned.filter((m) => /^Body_/.test(m.name));
+    const ray = new THREE.Raycaster(new THREE.Vector3(x, y, chest.z + 1).applyMatrix4(this.root.matrixWorld), new THREE.Vector3(0, 0, -1).transformDirection(this.root.matrixWorld));
+    const hit = ray.intersectObjects(body, false).find((h) => h.distance < 1.0);
+    if (!hit) return null;
+    const pos = hit.point.clone().applyMatrix4(inv);
+    const normal = (hit.face?.normal.clone() ?? new THREE.Vector3(0, 0, 1)).transformDirection(hit.object.matrixWorld).transformDirection(inv);
+    if (normal.z < 0) normal.negate();
+    normal.lerp(new THREE.Vector3(0, 0, 1), 0.5).normalize(); // keep the badge upright-ish on curved shells
+    return (this.logoAnchors[placement] = { pos, normal });
   }
 
   // ================================================================ gaze
@@ -842,3 +966,13 @@ export class RobotAvatar extends Emitter<RobotEvents> {
 }
 
 export { parseBone, clampEuler };
+
+/** Recolourable parts: body = main white shell, trim = secondary panels, joints = dark joints, accent = metal trims,
+ *  uniform = concierge vest, visor = face screen, light = LED rings/strips, eyes = face LEDs. */
+export type ColorPart = "body" | "trim" | "joints" | "accent" | "uniform" | "visor" | "light" | "eyes";
+export type LogoPlacement = "center" | "left";
+export const COLOR_PARTS: ColorPart[] = ["body", "trim", "joints", "accent", "uniform", "visor", "light", "eyes"];
+const COLOR_MATERIAL: Record<ColorPart, string> = {
+  body: "Mat_Shell", trim: "Mat_Shell2", joints: "Mat_Dark", accent: "Mat_Accent", uniform: "Mat_Uniform",
+  visor: "Mat_Visor", light: "Mat_Glow", eyes: "Mat_Face",
+};
