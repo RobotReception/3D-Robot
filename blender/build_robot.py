@@ -65,7 +65,7 @@ STYLES = {
         ankle=0.04, sh_x=0.168, hand_scale=0.55, default_emotion="content",
         shell=(0.95, 0.95, 0.965), shell2=(0.72, 0.74, 0.86), dark=(0.01, 0.011, 0.016), accent=(0.36, 0.36, 0.72),
         glow=(0.16, 0.32, 1.0), metal=0.0, rough=0.34, coat=0.6, eye=(0.125, 0.11), eye_p=2.0, mouth_w=0.035,
-        eye_x_k=0.33, eye_z_k=0.035, mouth_z_k=0.3, visor_w=0.70, visor_h=0.64, visor_z=0.12, hide_idle_face=True, glow_strength=2.4, face_strength=1.6,
+        eye_x_k=0.33, eye_z_k=0.035, mouth_z_k=0.3, visor_w=0.70, visor_h=0.64, visor_z=0.12, hide_idle_face=True, glow_strength=1.2, face_strength=0.45,
     ),
 }
 
@@ -760,8 +760,8 @@ def build(style_name, out_glb, out_blend=None, out_json=None):
         "dark": make_material("Mat_Dark", S["dark"], 0.3, 0.55),
         "accent": make_material("Mat_Accent", S["accent"], 0.7 if style_name != "friendly" else 0.1, 0.28, 0.5),
         "visor": make_material("Mat_Visor", (0.01, 0.012, 0.018), 0.0, 0.06, 1.0),
-        "glow": make_material("Mat_Glow", (0.02, 0.02, 0.025), 0.0, 0.4, 0.0, S["glow"], 1.6),
-        "face": make_material("Mat_Face", (0.02, 0.02, 0.025), 0.0, 0.5, 0.0, S["glow"], 1.25),
+        "glow": make_material("Mat_Glow", (0.02, 0.02, 0.025), 0.0, 0.4, 0.0, S["glow"], 0.9),
+        "face": make_material("Mat_Face", (0.02, 0.02, 0.025), 0.0, 0.5, 0.0, S["glow"], 0.4),
     }
     for k in ("face",):
         mats[k].use_backface_culling = False

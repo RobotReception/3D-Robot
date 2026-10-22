@@ -259,7 +259,7 @@ export class RobotViewer {
       this.bloomComposer = new EffectComposer(this.renderer, mk());
       this.bloomComposer.renderToScreen = false;
       this.bloomComposer.addPass(new RenderPass(this.scene, this.camera));
-      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.38, 0.3, 0);
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.16, 0.25, 0);
       this.bloomComposer.addPass(this.bloomPass);
       const mix = new ShaderPass(
         new THREE.ShaderMaterial({
