@@ -57,6 +57,8 @@ export class LocomotionController {
   private goal: { x: number; z: number; opts: WalkOptions } | null = null;
   private turnGoal: number | null = null; // world yaw rad
   private continuous = false;
+  /** true when the last command reached its goal, false when interrupted/replaced */
+  lastArrived = false;
   private resolve: ((ok: boolean) => void) | null = null;
   private stepCount = 0;
   private stepTimer = 0;
@@ -113,6 +115,7 @@ export class LocomotionController {
   // ---- commands
   walkTo(x: number, z: number, opts: WalkOptions = {}): Promise<boolean> {
     this.cancel(false);
+    this.lastArrived = false;
     this.goal = { x, z, opts };
     this.state = "walking";
     this.continuous = false;
@@ -121,6 +124,7 @@ export class LocomotionController {
   /** walk straight ahead until stop() */
   walkForward(speed = 0.7) {
     this.cancel(false);
+    this.lastArrived = false;
     this.state = "walking";
     this.continuous = true;
     this.goal = null;
@@ -128,6 +132,7 @@ export class LocomotionController {
   }
   turnTo(worldYawDeg: number): Promise<boolean> {
     this.cancel(false);
+    this.lastArrived = false;
     this.turnGoal = worldYawDeg * DEG;
     this.state = "turning";
     return new Promise((res) => (this.resolve = res));
@@ -138,6 +143,7 @@ export class LocomotionController {
   /** hard stop (no deceleration, no settling steps): used by resetPose */
   halt() {
     this.cancel(false);
+    this.lastArrived = false;
     this.v = 0;
     this.vTarget = 0;
     this.omega = 0;
@@ -154,6 +160,7 @@ export class LocomotionController {
   private cancel(settle: boolean) {
     const r = this.resolve;
     this.resolve = null;
+    this.lastArrived = false;
     this.goal = null;
     this.turnGoal = null;
     this.continuous = false;
@@ -235,6 +242,7 @@ export class LocomotionController {
   private finishMotion() {
     if (this.state !== "idle") this.settling = true;
     this.state = "idle";
+    this.lastArrived = true;
   }
 
   private moving() {

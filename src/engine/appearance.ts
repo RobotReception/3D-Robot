@@ -1,9 +1,19 @@
 import * as THREE from "three";
 
-/** Satin finishes and readable, non-emissive facial features under ordinary light. */
+/**
+ * Version 2 models ship a baked texture atlas (baseColor+AO, normal,
+ * metallicRoughness, emissive) authored by blender/build_robot.py — their look
+ * is final, so we only keep the glass visor reflective. Version 1 models are
+ * flat-coloured and get the original hand-tuned finish pass.
+ */
 export function applyNaturalAppearance(materials: Iterable<THREE.Material>) {
   for (const material of materials) {
     if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+    const textured = material.map !== null || material.normalMap !== null;
+    if (textured) {
+      if (material.name === "Mat_Visor") material.envMapIntensity = Math.max(material.envMapIntensity, 0.8);
+      continue;
+    }
     switch (material.name) {
       case "Mat_Shell":
       case "Mat_Shell2":

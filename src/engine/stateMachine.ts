@@ -65,13 +65,13 @@ export class AssistantStateMachine {
     if (!this.can(to, o.force)) return false;
     const r = this.robot;
     const from = this.state;
+    this.state = to;
     // exit
     if (from === "listening") r.animation.stop("listening");
     if (from === "thinking") r.animation.stop("thinking");
     if (from === "speaking" && !o.fromSpeech && (to === "listening" || to === "thinking" || to === "idle" || to === "error")) {
       r.stopSpeech();
     }
-    this.state = to;
     // enter
     r.setGlow(GLOW[to], to === "error" ? 0.8 : 0);
     switch (to) {

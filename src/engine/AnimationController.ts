@@ -185,17 +185,17 @@ export class AnimationController {
     e.ending = true;
     if (fade !== undefined) e.fadeOut = Math.max(0.01, fade);
     if (immediate) e.weight = 0;
+    this.onEvent?.("end", { name: e.name, channel: e.channel });
   }
 
   update(dt: number) {
-    for (const [channel, stack] of this.stacks) {
+    for (const stack of this.stacks.values()) {
       const top = this.topOf(stack);
       let sum = 0;
       for (const e of stack) {
         // one-shot finished?
         if (!e.loop && !e.ending && e.action.time >= e.duration - 1e-3) {
           this.end(e, false);
-          this.onEvent?.("end", { name: e.name, channel });
         }
         const target = !e.ending && e === top ? 1 : 0;
         const rate = target === 1 ? 1 / e.fadeIn : 1 / e.fadeOut;
@@ -234,6 +234,7 @@ export class AnimationController {
   }
 
   dispose() {
+    for (const stack of this.stacks.values()) for (const e of stack) this.end(e, true);
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.proxy);
     this.baked.clear();

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { makeRobot, run, lp, wp, morph } from "./helpers/robot";
 import { executeCommand, executeMessage } from "../src/engine/commands";
@@ -203,6 +203,28 @@ describe("Robot API is wired to real bones and morphs", () => {
     expect(hand.clone().sub(sh).length()).toBeLessThan(0.45);
   });
 
+  it("eye glow is opt-in, keeps custom colors, and supports steady or pulsing emission", async () => {
+    const r = await makeRobot();
+    const glow = r.parts.materials.get("Mat_Glow") as THREE.MeshStandardMaterial;
+    const face = r.parts.materials.get("Mat_Face") as THREE.MeshStandardMaterial;
+    r.setEyeColor("#ff0000");
+    run(r, 0.2);
+    expect(face.emissive.getHexString()).toBe("ff0000");
+    expect(glow.emissiveIntensity).toBe(0);
+    r.setEyeGlow(true);
+    const base = glow.emissiveIntensity;
+    expect(base).toBeGreaterThan(0);
+    r.setGlow("#00ff00", 0.8);
+    expect(glow.emissive.getHexString()).toBe("00ff00");
+    expect(glow.emissiveIntensity).toBeGreaterThan(base);
+    r.eyeGlowPulse = false;
+    r.setGlow("#00ff00", 0.8);
+    expect(glow.emissiveIntensity).toBeCloseTo(base, 5);
+    r.setEyeGlow(false);
+    expect(glow.emissiveIntensity).toBe(0);
+    expect(face.emissive.getHexString()).toBe("ff0000");
+  });
+
   it("resetPose returns every driven bone to the rest pose and clears all layers", async () => {
     const r = await makeRobot();
     r.moveHead({ yaw: 40 });
@@ -277,6 +299,41 @@ describe("state machine", () => {
     expect(r.speaking).toBe(false);
     expect(ends).toEqual([false, true]);
     expect(r.stateMachine.state).toBe("listening");
+  });
+
+  it("barge-in emits one state transition instead of re-entering through speechEnded", async () => {
+    const r = await makeRobot();
+    const seen: string[] = [];
+    r.on("state", (e) => seen.push(`${e.from}>${e.to}`));
+    r.speak({ text: "A much longer sentence that keeps talking for a while.", tts: false });
+    run(r, 0.3);
+    r.setState("thinking");
+    expect(seen).toEqual(["idle>speaking", "speaking>thinking"]);
+  });
+
+  it("stopping speech while audio is loading cannot play the late result", async () => {
+    const r = await makeRobot();
+    let deliver!: (loaded: unknown) => void;
+    const loading = new Promise((resolve) => (deliver = resolve));
+    const play = vi.fn();
+    r.audio = {
+      resume: async () => {},
+      load: () => loading,
+      play,
+      dispose: () => {},
+    } as unknown as typeof r.audio;
+    const ends: boolean[] = [];
+    r.on("speech:end", (e) => ends.push(e.interrupted));
+    const h = r.speak({ audioUrl: "late.wav" });
+    await flush();
+    h.stop();
+    deliver({});
+    await flush();
+    await h.finished;
+    expect(play).not.toHaveBeenCalled();
+    expect(ends).toEqual([true]);
+    expect(r.speaking).toBe(false);
+    expect(r.stateMachine.state).toBe("idle");
   });
 });
 
@@ -393,9 +450,14 @@ describe("performance & resources", () => {
     console.log(`engine update: ${ms.toFixed(3)} ms/frame`);
   });
 
-  it("dispose releases geometries and materials without throwing", async () => {
+  it("dispose releases geometries, materials, and material textures without throwing", async () => {
     const r = await makeRobot();
+    const material = r.parts.skinned[0].material as THREE.MeshStandardMaterial;
+    const texture = new THREE.Texture();
+    const dispose = vi.spyOn(texture, "dispose");
+    material.map = texture;
     run(r, 0.2);
     expect(() => r.dispose()).not.toThrow();
+    expect(dispose).toHaveBeenCalledOnce();
   });
 });

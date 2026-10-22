@@ -27,10 +27,10 @@ export function webglSupported(): boolean {
   }
 }
 
-const QUALITY: Record<QualityLevel, { pixelRatio: number; shadows: boolean; shadowMap: number; envIntensity: number; toneMapping: THREE.ToneMapping; bloom: boolean }> = {
-  low: { pixelRatio: 1, shadows: false, shadowMap: 512, envIntensity: 0.65, toneMapping: THREE.ACESFilmicToneMapping, bloom: false },
-  medium: { pixelRatio: 1.5, shadows: true, shadowMap: 1024, envIntensity: 0.65, toneMapping: THREE.ACESFilmicToneMapping, bloom: false },
-  high: { pixelRatio: 2, shadows: true, shadowMap: 2048, envIntensity: 0.65, toneMapping: THREE.ACESFilmicToneMapping, bloom: false },
+const QUALITY: Record<QualityLevel, { pixelRatio: number; shadows: boolean; shadowMap: number; envIntensity: number; toneMapping: THREE.ToneMapping }> = {
+  low: { pixelRatio: 1, shadows: false, shadowMap: 512, envIntensity: 0.65, toneMapping: THREE.ACESFilmicToneMapping },
+  medium: { pixelRatio: 1.5, shadows: true, shadowMap: 1024, envIntensity: 0.65, toneMapping: THREE.ACESFilmicToneMapping },
+  high: { pixelRatio: 2, shadows: true, shadowMap: 2048, envIntensity: 0.65, toneMapping: THREE.ACESFilmicToneMapping },
 };
 const BACKGROUNDS: Record<BackgroundPreset, { color: string | null; floor: string }> = {
   studio: { color: "#10131a", floor: "#1b2030" },
@@ -220,7 +220,6 @@ export class RobotViewer {
     this.renderer.toneMappingExposure = this.light.exposure;
     this.scene.environmentIntensity = c.envIntensity;
     this.grid.visible = q !== "low" && this.light.grid;
-    this.setBloom(c.bloom);
     this.floor.receiveShadow = c.shadows;
     // materials need recompiling when shadows toggle
     this.scene.traverse((o) => {

@@ -58,6 +58,46 @@ describe("animation library", () => {
     expect(r.animation.active().armR).toEqual(["idle"]);
   });
 
+  it("stopping or clearing a clip resolves its finished promise", async () => {
+    const r = await makeRobot();
+    const looping = r.playAnimation("listening");
+    let loopingEnded = false;
+    void looping.finished.then(() => (loopingEnded = true));
+    run(r, 0.2);
+    r.stopAnimation("listening");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(loopingEnded).toBe(true);
+
+    const oneShot = r.playAnimation("greeting");
+    let oneShotEnded = false;
+    void oneShot.finished.then(() => (oneShotEnded = true));
+    run(r, 0.2);
+    r.resetPose();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(oneShotEnded).toBe(true);
+  });
+
+  it("cancels scheduled motion events when a clip is stopped or reset", async () => {
+    const r = await makeRobot();
+    const motion = {
+      name: "lateEvent", duration: 2,
+      keys: [{ t: 0, head: { yaw: 0 } }, { t: 2, head: { yaw: 10 } }],
+      events: [{ t: 1, emotion: "angry" }],
+    };
+    expect(r.registerMotion(motion).ok).toBe(true);
+    r.playAnimation("lateEvent");
+    run(r, 0.2);
+    r.stopAnimation("lateEvent");
+    run(r, 2);
+    expect(r.face.emotion.name).not.toBe("angry");
+
+    r.playAnimation("lateEvent");
+    run(r, 0.2);
+    r.resetPose();
+    run(r, 2);
+    expect(r.face.emotion.name).not.toBe("angry");
+  });
+
   it("crossfades smoothly: no pose pops between consecutive frames", async () => {
     const r = await makeRobot();
     run(r, 1);

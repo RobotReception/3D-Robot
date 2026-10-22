@@ -440,8 +440,9 @@ await check("quality levels change the real render settings (pixel ratio, shadow
   const calls = await page.evaluate(() => window.viewer.stats.calls);
   ok(calls > 20, "stats should count all passes: " + calls);
   await page.selectOption('[data-testid="quality-select"]', "medium");
-  const off = await page.evaluate(() => window.viewer.bloom);
-  ok(off === false, "bloom should be off at medium");
+  const kept = await page.evaluate(() => window.viewer.bloom);
+  ok(kept === true, "quality changes must preserve a user-enabled bloom");
+  await page.evaluate(() => window.viewer.setBloom(false));
   q.bloom = b;
   return q;
 });

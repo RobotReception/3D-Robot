@@ -25,6 +25,43 @@ describe("locomotion (IK-planted walking)", () => {
     expect(lf.x - rf.x).toBeGreaterThan(0.14);
   });
 
+  it("walk:end reports arrival only after settling, and interruption otherwise", async () => {
+    const r = await makeRobot();
+    const ends: boolean[] = [];
+    r.on("walk:end", (e) => ends.push(e.arrived));
+    let arrived: boolean | undefined;
+    void r.walkTo({ x: 0, z: 1 }).then((v) => (arrived = v));
+    run(r, 6);
+    await flush();
+    expect(arrived).toBe(true);
+    expect(ends).toEqual([true]);
+    expect(r.locomotion.busy).toBe(false);
+
+    const interrupted = r.walkTo({ x: 0, z: 4 });
+    run(r, 0.4);
+    expect(ends).toEqual([true]);
+    r.stopAnimation("walking");
+    expect(await interrupted).toBe(false);
+    run(r, 3);
+    expect(ends).toEqual([true, false]);
+
+    const reset = r.walkTo({ x: 0, z: 6 });
+    run(r, 0.2);
+    r.resetPose();
+    expect(await reset).toBe(false);
+    run(r, 2);
+    expect(ends).toEqual([true, false, false]);
+
+    const walking = r.playAnimation("walking");
+    let finished = false;
+    void walking.finished.then(() => (finished = true));
+    run(r, 0.2);
+    expect(finished).toBe(false);
+    r.stopAnimation("walking");
+    await flush();
+    expect(finished).toBe(true);
+  });
+
   it("stance feet do not slide: a planted foot stays fixed in world space", async () => {
     const r = await makeRobot();
     void r.walkTo({ x: 0, z: 4 }, { speed: 0.8 });

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { loadModelNode, type RobotStyle } from "./helpers/loadRobot";

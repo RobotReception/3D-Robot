@@ -95,8 +95,10 @@ export interface RobotAvatarOptions {
   clips?: typeof BUILTIN_CLIPS;
   /** Disable automatic eye-blink animation; manual `blink()` calls still work. */
   autoBlink?: boolean;
-  /** When false, the eye glow stays steady and does not pulse/flicker. */
+  /** Enable the emissive eye glow (default off for a natural look). */
   eyeGlow?: boolean;
+  /** Pulse the eye glow with speech; set false for a steady glow. Ignored when `eyeGlow` is off. */
+  eyeGlowPulse?: boolean;
   idleGaze?: boolean;
   /** overrides the model's default resting emotion */
   defaultEmotion?: EmotionName;
@@ -136,8 +138,10 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   audio: AudioController | null = null;
 
   time = 0;
-  /** Disable the eye glow pulse/flicker while leaving the material colors intact. */
+  /** Enable the emissive eye glow (default off). */
   eyeGlow = false;
+  /** Pulse the eye glow with speech; false keeps it steady. */
+  eyeGlowPulse = true;
   /** emotion used when idle / after reset (model default, e.g. "friendly" for the mascot) */
   defaultEmotion: EmotionName = "neutral";
   private reach: Record<Side, Reach> = {
@@ -145,9 +149,9 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     R: { target: null, handLength: 0.13, weight: 0, goal: 0, hold: null },
   };
   private reachRest: Record<Side, LimbRest>;
-  private speech: { token: number; stop: () => void } | null = null;
+  private speech: { token: number; stop: (silent?: boolean) => void } | null = null;
   private speechToken = 0;
-  private glowBase = new Map<THREE.Material, { color: THREE.Color; intensity: number }>();
+  private glowBase = new Map<THREE.Material, { color: THREE.Color; original: THREE.Color; intensity: number }>();
   private glowBoost = 0;
 
   constructor(parts: RobotModelParts, opts: RobotAvatarOptions = {}) {
@@ -171,6 +175,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     });
     if (opts.rng) this.face.rng = opts.rng;
     this.eyeGlow = opts.eyeGlow ?? false;
+    this.eyeGlowPulse = opts.eyeGlowPulse ?? true;
     this.face.autoBlink = opts.autoBlink ?? false;
     this.lipsync = new LipSyncController(this.face);
     this.gaze = new GazeController(this.joints);
@@ -182,7 +187,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     this.stateMachine = new AssistantStateMachine(this);
     for (const name of ["Mat_Glow", "Mat_Face"]) {
       const mat = parts.materials.get(name) as THREE.MeshStandardMaterial | undefined;
-      if (mat) this.glowBase.set(mat, { color: mat.emissive.clone(), intensity: mat.emissiveIntensity });
+      if (mat) this.glowBase.set(mat, { color: mat.emissive.clone(), original: mat.emissive.clone(), intensity: mat.emissiveIntensity });
     }
     this.defaultEmotion = (opts.defaultEmotion ?? parts.defaultEmotion ?? "neutral") as EmotionName;
     this.face.setEmotion(this.defaultEmotion);
@@ -221,6 +226,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     if (this.timers.length) {
       const due: (() => void)[] = [];
       this.timers = this.timers.filter((tm) => {
+        if (tm.cancelled) return false;
         tm.t -= dt;
         if (tm.t <= 0) due.push(tm.fn);
         return tm.t > 0;
@@ -229,20 +235,69 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     }
   }
 
-  private timers: { t: number; fn: () => void }[] = [];
-  /** Run `fn` after `seconds` of *robot time* (advances with update(), so it is deterministic in tests). */
-  after(seconds: number, fn: () => void) {
-    this.timers.push({ t: seconds, fn });
+  private timers: { t: number; fn: () => void; cancelled: boolean }[] = [];
+  /**
+   * Run `fn` after `seconds` of *robot time* (advances with update(), so it is deterministic in tests).
+   * Returns a cancel function.
+   */
+  after(seconds: number, fn: () => void): () => void {
+    const timer = { t: seconds, fn, cancelled: false };
+    this.timers.push(timer);
+    return () => {
+      timer.cancelled = true;
+    };
   }
   /** Promise that resolves after `seconds` of robot time. */
   delay(seconds: number): Promise<void> {
     return new Promise((res) => this.after(seconds, res));
   }
 
+  /** Timers owned by one motion: cancelled when that motion ends or is replaced. */
+  private animationTimers = new Map<string, Set<() => void>>();
+  private afterAnimation(name: string, seconds: number, fn: () => void): () => void {
+    const timers = this.animationTimers.get(name) ?? new Set<() => void>();
+    this.animationTimers.set(name, timers);
+    let cancel!: () => void;
+    let cancelled = false;
+    const wrapped = () => {
+      cancelled = true;
+      cancel();
+      timers.delete(wrapped);
+    };
+    cancel = this.after(seconds, () => {
+      if (cancelled) return;
+      timers.delete(wrapped);
+      fn();
+    });
+    timers.add(wrapped);
+    return wrapped;
+  }
+  private cancelAnimationTimers(name?: string) {
+    if (name !== undefined) {
+      const timers = this.animationTimers.get(name);
+      if (timers) {
+        for (const cancel of [...timers]) cancel();
+        this.animationTimers.delete(name);
+      }
+      return;
+    }
+    for (const timers of this.animationTimers.values()) for (const cancel of [...timers]) cancel();
+    this.animationTimers.clear();
+  }
+
   private walkWasBusy = false;
+  private walkFinished: (() => void) | null = null;
+  private resolveWalkFinished() {
+    const resolve = this.walkFinished;
+    this.walkFinished = null;
+    resolve?.();
+  }
   private updateWalkEvents() {
-    const busy = this.locomotion.state !== "idle";
-    if (this.walkWasBusy && !busy) this.emit("walk:end", { arrived: true });
+    const busy = this.locomotion.busy;
+    if (this.walkWasBusy && !busy) {
+      this.emit("walk:end", { arrived: this.locomotion.lastArrived });
+      this.resolveWalkFinished();
+    }
     this.walkWasBusy = busy;
   }
 
@@ -304,20 +359,24 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
 
   private updateGlow(dt: number) {
-    for (const [mat, base] of this.glowBase) {
-      const material = mat as THREE.MeshStandardMaterial;
-      if (!this.eyeGlow) {
-        material.emissive.set(base.color);
+    if (!this.eyeGlow) {
+      for (const [mat, base] of this.glowBase) {
+        const material = mat as THREE.MeshStandardMaterial;
+        material.emissive.copy(base.color);
         material.emissiveIntensity = 0;
-        continue;
       }
-      material.emissiveIntensity = base.intensity * (mat.name === "Mat_Glow" ? 1 : 1);
+      return;
     }
-    if (!this.eyeGlow) return;
-    this.glowBoost += (0 - this.glowBoost) * (1 - Math.exp(-dt / 0.3));
+    if (this.eyeGlowPulse) {
+      this.glowBoost += (0 - this.glowBoost) * (1 - Math.exp(-dt / 0.3));
+    } else {
+      this.glowBoost = 0;
+    }
     const pulse = 1 + 0.35 * this.lipsync.energy + this.glowBoost;
     for (const [mat, base] of this.glowBase) {
-      (mat as THREE.MeshStandardMaterial).emissiveIntensity = base.intensity * (mat.name === "Mat_Glow" ? pulse : 1);
+      const material = mat as THREE.MeshStandardMaterial;
+      material.emissive.copy(base.color);
+      material.emissiveIntensity = base.intensity * (mat.name === "Mat_Glow" && this.eyeGlowPulse ? pulse : 1);
     }
   }
 
@@ -337,7 +396,10 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     }
     const res = compileMotion(json, { existingNames: this.animation.list().map((d) => d.name), overwrite: o.overwrite });
     if (res.ok && res.def) {
-      if (this.animation.isPlaying(res.def.name)) this.animation.stop(res.def.name, 0.05);
+      if (this.animation.isPlaying(res.def.name)) {
+        this.animation.stop(res.def.name, 0.05);
+        this.cancelAnimationTimers(res.def.name);
+      }
       this.animation.register(res.def);
       this.motionEvents.set(res.def.name, res.events);
       this.motionSources.set(res.def.name, json);
@@ -360,30 +422,38 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   /** Play a clip ("greeting", "happy", ...) or locomotion ("walking", "turning"). */
   playAnimation(name: string, opts: PlayOptions & { emotion?: boolean } = {}): AnimationHandle {
     if (name === "walking") {
+      this.resolveWalkFinished();
+      const finished = new Promise<void>((resolve) => (this.walkFinished = resolve));
       this.locomotion.walkForward(0.7);
+      this.walkWasBusy = true;
       this.emit("animation:start", { name, channels: [] });
-      return { name, accepted: [], rejected: [], finished: Promise.resolve() };
+      return { name, accepted: [], rejected: [], finished };
     }
     if (name === "turning") {
+      this.resolveWalkFinished();
       const p = this.locomotion.turnBy(90);
+      this.walkWasBusy = true;
       this.emit("animation:start", { name, channels: [] });
       return { name, accepted: [], rejected: [], finished: p.then(() => undefined) };
     }
     if (!this.animation.has(name)) throw new Error(`Unknown animation "${name}". Available: ${this.listAnimations().join(", ")}`);
     const res = this.animation.play(name, opts);
-    if (res.accepted.length && opts.emotion !== false && ANIMATION_EMOTION[name]) {
-      this.face.setEmotion(ANIMATION_EMOTION[name] as EmotionName);
-      const def = this.animation.def(name)!;
-      if (!def.loop) this.after((def.duration * 0.85) / Math.max(0.1, this.animation.speed), () => this.maybeRestoreEmotion(name));
-    }
-    const evs = res.accepted.length ? this.motionEvents.get(name) : undefined;
-    if (evs) {
-      for (const e of evs) {
-        this.after(e.t / Math.max(0.1, (opts.speed ?? 1) * this.animation.speed), () => {
-          if (e.emotion) this.setEmotion(e.emotion as EmotionName, e.intensity ?? 1);
-          if (e.eyeExpression !== undefined) this.setEyeExpression(e.eyeExpression as EyeExpression | null);
-          if (e.blink) this.blink();
-        });
+    if (res.accepted.length) {
+      this.cancelAnimationTimers(name);
+      if (opts.emotion !== false && ANIMATION_EMOTION[name]) {
+        this.face.setEmotion(ANIMATION_EMOTION[name] as EmotionName);
+        const def = this.animation.def(name)!;
+        if (!def.loop) this.afterAnimation(name, (def.duration * 0.85) / Math.max(0.1, this.animation.speed), () => this.maybeRestoreEmotion(name));
+      }
+      const evs = this.motionEvents.get(name);
+      if (evs) {
+        for (const e of evs) {
+          this.afterAnimation(name, e.t / Math.max(0.1, (opts.speed ?? 1) * this.animation.speed), () => {
+            if (e.emotion) this.setEmotion(e.emotion as EmotionName, e.intensity ?? 1);
+            if (e.eyeExpression !== undefined) this.setEyeExpression(e.eyeExpression as EyeExpression | null);
+            if (e.blink) this.blink();
+          });
+        }
       }
     }
     const finished = new Promise<void>((resolve) => {
@@ -393,6 +463,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
         if (e.name === name && e.channel) left.delete(e.channel);
         if (!left.size) {
           off();
+          this.cancelAnimationTimers(name);
           resolve();
         }
       });
@@ -404,8 +475,13 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     if (this.stateMachine.state === "idle" && ANIMATION_EMOTION[anim] === this.face.emotion.name) this.face.setEmotion(this.defaultEmotion);
   }
   stopAnimation(name?: string) {
-    if (name === "walking" || name === "turning") return this.locomotion.stop();
+    if (name === "walking" || name === "turning") {
+      this.locomotion.stop();
+      this.resolveWalkFinished();
+      return;
+    }
     this.animation.stop(name);
+    this.cancelAnimationTimers(name);
   }
   listAnimations(): string[] {
     return [...this.animation.list().map((d) => d.name), "walking", "turning"];
@@ -432,18 +508,21 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
   setGlow(color?: THREE.ColorRepresentation, boost = 0) {
     for (const [mat, base] of this.glowBase) {
-      const material = mat as THREE.MeshStandardMaterial;
-      if (!this.eyeGlow) {
-        material.emissive.set(base.color);
-        material.emissiveIntensity = 0;
-        continue;
-      }
-      if (mat.name === "Mat_Glow") material.emissive.set(color ?? base.color);
+      if (mat.name === "Mat_Glow") base.color.set(color ?? base.original);
     }
     this.glowBoost = boost;
+    this.updateGlow(0);
   }
   setEyeColor(color: THREE.ColorRepresentation) {
-    for (const [mat] of this.glowBase) if (mat.name === "Mat_Face") (mat as THREE.MeshStandardMaterial).emissive.set(color);
+    for (const [mat, base] of this.glowBase) {
+      if (mat.name !== "Mat_Face") continue;
+      base.color.set(color);
+      (mat as THREE.MeshStandardMaterial).emissive.copy(base.color);
+    }
+  }
+  setEyeGlow(on: boolean) {
+    this.eyeGlow = on;
+    this.updateGlow(0);
   }
 
   // ================================================================ gaze
@@ -592,17 +671,22 @@ export class RobotAvatar extends Emitter<RobotEvents> {
 
   // ================================================================ locomotion
   walkTo(target: { x: number; z: number }, o: WalkOptions = {}): Promise<boolean> {
+    this.resolveWalkFinished();
     this.emit("walk:start", { x: target.x, z: target.z });
     const p = this.locomotion.walkTo(target.x, target.z, o);
+    this.walkWasBusy = true;
     return p.then((ok) => {
       return ok;
     });
   }
   turnTo(yawDegrees: number): Promise<boolean> {
-    return this.locomotion.turnTo(yawDegrees);
+    this.resolveWalkFinished();
+    const p = this.locomotion.turnTo(yawDegrees);
+    this.walkWasBusy = true;
+    return p;
   }
   turnBy(degrees: number): Promise<boolean> {
-    return this.locomotion.turnBy(degrees);
+    return this.turnTo(this.locomotion.yaw / DEG + degrees);
   }
 
   // ================================================================ speech
@@ -624,12 +708,13 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     let mode: SpeechHandle["mode"] = "silent";
     let audioHandle: PlayingAudio | null = null;
     let ttsStop: (() => void) | null = null;
+    let cancelSilentTimer: (() => void) | null = null;
     let interrupted = false;
 
     let ended = false;
-    const done = () => {
-      if (token !== this.speechToken || ended) return;
-      ended = true;
+    const cleanup = (silent: boolean) => {
+      cancelSilentTimer?.();
+      cancelSilentTimer = null;
       this.speech = null;
       this.lipsync.stop();
       if (gestures) {
@@ -637,15 +722,24 @@ export class RobotAvatar extends Emitter<RobotEvents> {
         this.animation.stop("talkL");
       }
       if (!o.keepEmotion && o.emotion) this.setEmotion(prevEmotion.name, prevEmotion.intensity);
-      this.stateMachine.speechEnded();
-      this.emit("speech:end", { interrupted });
+      if (!silent) {
+        this.stateMachine.speechEnded();
+        this.emit("speech:end", { interrupted });
+      }
       resolveFinished();
     };
-    const stop = () => {
+    const finish = (silent = false) => {
+      if (token !== this.speechToken || ended) return;
+      ended = true;
+      ++this.speechToken;
+      cleanup(silent);
+    };
+    const stop = (silent = false) => {
+      if (ended) return;
       interrupted = true;
       audioHandle?.stop();
       ttsStop?.();
-      done();
+      finish(silent);
     };
     this.speech = { token, stop };
 
@@ -655,6 +749,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
         if (!loaded && o.audioUrl) {
           this.audio ??= new AudioController();
           await this.audio.resume();
+          if (token !== this.speechToken) return;
           loaded = await this.audio.load(o.audioUrl);
         }
         if (token !== this.speechToken) return;
@@ -662,6 +757,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
           mode = "audio";
           this.audio ??= new AudioController();
           await this.audio.resume();
+          if (token !== this.speechToken) return;
           let events: VisemeEvent[];
           if (o.visemes) events = o.visemes;
           else if (o.text) {
@@ -673,11 +769,11 @@ export class RobotAvatar extends Emitter<RobotEvents> {
           audioHandle = this.audio.play(loaded.buffer);
           this.emit("speech:start", { text: o.text, mode, duration: loaded.buffer.duration });
           if (lipSync) this.lipsync.playTimeline(events, { clock: audioHandle.time, envelope: loaded.envelope, onEnd: () => undefined });
-          void audioHandle.ended.then(() => token === this.speechToken && (this.lipsync.stop(), done()));
+          void audioHandle.ended.then(() => token === this.speechToken && finish());
           return;
         }
         if (!o.text && !o.visemes) {
-          done();
+          finish();
           return;
         }
         const rate = o.rate ?? 1;
@@ -712,18 +808,18 @@ export class RobotAvatar extends Emitter<RobotEvents> {
               streaming: true,
             });
           }
-          void h.ended.then(() => token === this.speechToken && done());
+          void h.ended.then(() => token === this.speechToken && finish());
           return;
         }
         // silent preview: run the viseme timeline against an internal clock
         mode = "silent";
         const events = o.visemes ?? textToVisemeEvents(o.text!, { rate });
         this.emit("speech:start", { text: o.text, mode, duration: est });
-        if (lipSync) this.lipsync.playTimeline(events, { onEnd: () => token === this.speechToken && done() });
-        else this.after(est, () => token === this.speechToken && done());
+        if (lipSync) this.lipsync.playTimeline(events, { onEnd: () => token === this.speechToken && finish() });
+        else cancelSilentTimer = this.after(est, () => finish());
       } catch (err) {
         this.emit("error", { message: (err as Error).message });
-        done();
+        finish();
       }
     };
     void start();
@@ -747,9 +843,10 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     this.lipsync.startLive(this.audio.liveSource());
     let usingVisemes = false;
     let finishedOnce = false;
-    const finish = () => {
+    const finish = (silent = false) => {
       if (token !== this.speechToken || finishedOnce) return;
       finishedOnce = true;
+      ++this.speechToken;
       this.speech = null;
       this.lipsync.stop();
       if (gestures) {
@@ -757,12 +854,14 @@ export class RobotAvatar extends Emitter<RobotEvents> {
         this.animation.stop("talkL");
       }
       if (o.emotion) this.setEmotion(prev.name, prev.intensity);
-      this.stateMachine.speechEnded();
-      this.emit("speech:end", { interrupted: false });
+      if (!silent) {
+        this.stateMachine.speechEnded();
+        this.emit("speech:end", { interrupted: false });
+      }
     };
-    this.speech = { token, stop: () => { stream.stop(); finish(); } };
+    this.speech = { token, stop: (silent = false) => { stream.stop(); finish(silent); } };
     this.emit("speech:start", { mode: "audio" });
-    const finished = stream.ended.then(finish);
+    const finished = stream.ended.then(() => finish());
     return {
       pushPCM16: (c) => stream.pushPCM16(c),
       pushVisemes: (ev) => {
@@ -782,12 +881,10 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
 
   stopSpeech(silent = false) {
-    if (this.speech) {
-      const s = this.speech;
-      s.stop();
-      this.speech = null;
-    }
-    void silent;
+    const speech = this.speech;
+    this.speech = null;
+    if (speech) speech.stop(silent);
+    else ++this.speechToken;
   }
   get speaking() {
     return this.speech !== null;
@@ -800,6 +897,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
 
   stop() {
     this.stopSpeech();
+    this.cancelAnimationTimers();
+    this.resolveWalkFinished();
     this.animation.stop();
     this.locomotion.stop();
     this.stopPointing();
@@ -808,6 +907,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   /** Back to the default standing pose: clears animations, joint overrides, IK, expression and speech. */
   resetPose(o: { position?: boolean } = {}) {
     this.stopSpeech();
+    this.cancelAnimationTimers();
+    this.resolveWalkFinished();
     this.animation.clear();
     this.overrides.clear();
     this.locomotion.halt();
@@ -850,17 +951,26 @@ export class RobotAvatar extends Emitter<RobotEvents> {
 
   dispose() {
     this.stopSpeech();
+    this.cancelAnimationTimers();
+    this.resolveWalkFinished();
     this.animation.dispose();
     this.audio?.dispose();
+    const textures = new Set<THREE.Texture>();
     this.model.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
         m.geometry?.dispose();
         const mats = Array.isArray(m.material) ? m.material : [m.material];
-        mats.forEach((x) => x.dispose());
+        for (const mat of mats) {
+          for (const [key, value] of Object.entries(mat)) {
+            if (key !== "envMap" && value instanceof THREE.Texture) textures.add(value);
+          }
+          mat.dispose();
+        }
         (m as THREE.SkinnedMesh).skeleton?.dispose();
       }
     });
+    for (const texture of textures) texture.dispose();
     this.root.removeFromParent();
   }
 }
