@@ -20,8 +20,8 @@
 | `idle` | loop | 12s | 0 | torso, head, armL, armR, fingersL, fingersR | Natural standing: breathing, weight shift, micro head and arm motion. |
 | `listening` | loop | 6s | 1 | torso, head, armL, armR, fingersL, fingersR | Attentive: slight lean toward the user, head tilt and slow nodding. |
 | `thinking` | loop | 6s | 1 | torso, head, armR, armL, fingersR, fingersL | Hand-to-chin pose, head tilted and turned away. |
-| `talkR` | loop | 6.4s | 3 | armR, fingersR | Light right-hand speech gesture. |
-| `talkL` | loop | 6s | 3 | armL, fingersL | Light left-hand speech gesture. |
+| `talkR` | loop | 12s | 3 | armR, fingersR | Right hand held in a relaxed speaking pose (beats are added by the SpeechPerformer). |
+| `talkL` | loop | 12s | 3 | armL, fingersL | Left hand held in a relaxed speaking pose (beats are added by the SpeechPerformer). |
 | `greeting` | one-shot | 3s | 6 | armR, fingersR, head, torso | Friendly raised-hand wave with a welcoming head tilt. |
 | `goodbye` | one-shot | 3.6s | 6 | armR, fingersR, head, torso | Slow farewell wave finishing with a small bow. |
 | `pointing` | one-shot | 2.6s | 8 | armR, fingersR, head | Right arm extended forward-right, index finger extended. |

@@ -38,8 +38,9 @@ export class LipSyncController {
   gain = 1;
   /** shift visemes relative to audio (+ = mouth later), milliseconds. Tune for TTS/network latency. */
   offsetMs = 0;
-  /** seconds to look ahead (mouths lead sound slightly in real speech) */
-  lookahead = 0.03;
+  /** extra seconds to look ahead on top of the built-in anticipation (every viseme already ramps in ~50 ms before its
+   *  event, as mouths lead sound in real speech; see VisemeTimeline.weights) */
+  lookahead = 0;
   /** 0 = ignore loudness, 1 = fully gate visemes by loudness in hybrid mode */
   hybrid = 0.85;
 

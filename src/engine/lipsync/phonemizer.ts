@@ -15,6 +15,10 @@ export interface Unit {
   /** relative duration in seconds at normal speaking rate */
   dur: number;
   kind: "vowel" | "consonant" | "pause";
+  /** lexical stress 0..1 on the stressed vowel of a content word (set by `textToUnits`) */
+  accent?: number;
+  /** the punctuation that produced this pause ("." "," "?" ...) */
+  mark?: string;
 }
 
 const V = (viseme: Viseme, weight = 1, dur = 0.11): Unit => ({ viseme, weight, dur, kind: "vowel" });
@@ -155,14 +159,31 @@ const PAUSE_MAP: Record<string, number> = {
   "…": 0.4, "\n": 0.35, "-": 0.06, "—": 0.15,
 };
 
+/** words that do not carry sentence stress (English articles, prepositions, auxiliaries, pronouns...) */
+const FUNCTION_WORDS = new Set((
+  "a an the and or but nor so of to in on at by for with from as is are was were be been am do does did can could will would " +
+  "shall should may might i you he she it we they me him her us them my your his its our their this that these those there " +
+  "here if than then too very just not no yes oh um uh how what when where who why which"
+).split(" "));
+const AR_FUNCTION = new Set("و في من على إلى الى عن أن ان إن لا ما هو هي هم نحن أنا انا أنت انت هذا هذه ذلك التي الذي مع بل أو او قد كل".split(" "));
+const MARK_RANK: Record<string, number> = { "?": 6, "؟": 6, "!": 5, ".": 4, "…": 4, ":": 3, ";": 3, "؛": 3, ",": 2, "،": 2, "—": 1, "-": 0 };
+const BOUNDARY = 0.18; // pauses at least this long end a phrase (same threshold as alignTextToActivity)
+
 export function textToUnits(text: string): Unit[] {
   const units: Unit[] = [];
   const t = text.normalize("NFC").toLowerCase();
   let word = "";
   let wordKind: "en" | "ar" | null = null;
+  type W = { text: string; kind: "en" | "ar"; units: Unit[] };
+  const words: W[] = [];
+  const phraseWords: W[][] = [[]]; // words grouped by phrase (split at boundary pauses) for the nuclear accent
   const flush = () => {
     if (!word) return;
-    units.push(...(wordKind === "ar" ? arabicWord(word) : englishWord(word)));
+    const u = wordKind === "ar" ? arabicWord(word) : englishWord(word);
+    units.push(...u);
+    const w: W = { text: word, kind: wordKind ?? "en", units: u };
+    words.push(w);
+    phraseWords[phraseWords.length - 1].push(w);
     word = "";
     wordKind = null;
   };
@@ -180,12 +201,32 @@ export function textToUnits(text: string): Unit[] {
       const p = PAUSE_MAP[ch];
       if (p !== undefined) {
         const last = units[units.length - 1];
-        if (last && last.kind === "pause") last.dur = Math.max(last.dur, p);
-        else units.push(PAUSE(p));
+        if (last && last.kind === "pause") {
+          last.dur = Math.max(last.dur, p);
+          if (MARK_RANK[ch] !== undefined && (MARK_RANK[ch] ?? -1) > (MARK_RANK[last.mark ?? ""] ?? -1)) last.mark = ch;
+        } else units.push({ ...PAUSE(p), mark: MARK_RANK[ch] !== undefined ? ch : undefined });
+        if (p >= BOUNDARY && phraseWords[phraseWords.length - 1].length) phraseWords.push([]);
       }
     }
   }
   flush();
+  // ---- sentence stress: content words carry an accent on their most open vowel; the last content word of each
+  // phrase (nuclear accent) is the strongest, the first content word of the text a little stronger
+  const content = (w: W) => !(w.kind === "en" ? FUNCTION_WORDS.has(w.text) : AR_FUNCTION.has(w.text) || w.text.length <= 2);
+  const base = (w: W) => (w.text.length >= 7 ? 0.8 : w.text.length >= 4 ? 0.65 : 0.5);
+  const accentOf = new Map<W, number>();
+  for (const w of words) if (content(w)) accentOf.set(w, base(w));
+  for (const ph of phraseWords) {
+    const cw = ph.filter(content);
+    if (cw.length) accentOf.set(cw[cw.length - 1], 1);
+  }
+  const firstContent = words.find(content);
+  if (firstContent) accentOf.set(firstContent, Math.min(1, (accentOf.get(firstContent) ?? 0.6) + 0.1));
+  for (const [w, a] of accentOf) {
+    let best: Unit | null = null;
+    for (const u of w.units) if (u.kind === "vowel" && (!best || u.weight * u.dur > best.weight * best.dur)) best = u;
+    if (best) best.accent = a;
+  }
   return units;
 }
 
@@ -209,7 +250,7 @@ export function textToVisemeEvents(text: string, o: TimelineOptions = {}): Visem
   let t = o.offset ?? 0;
   for (const u of units) {
     const d = u.dur * scale;
-    events.push({ time: t, viseme: u.viseme, duration: d, weight: u.weight });
+    events.push({ time: t, viseme: u.viseme, duration: d, weight: u.weight, ...(u.accent ? { accent: u.accent } : {}), ...(u.mark ? { mark: u.mark } : {}) });
     t += d;
   }
   total *= scale;

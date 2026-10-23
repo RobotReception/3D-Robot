@@ -39,3 +39,32 @@ No access to the audio, so the mouth follows the text timeline (estimated durati
 - Audio analysis on formant-synthesised vowels `a e i o u` + `s` at 16/22.05/44.1 kHz: all segments labelled correctly, onsets within ≈ 20–40 ms; in Chromium, 100 % of mouth samples in the segment interiors matched the expected viseme while playing through Web Audio.
 - Hybrid on a "hello"-shaped synthetic clip: mouth closed in the leading/trailing silence (mean opening ≤ 0.12) and open during speech (≈ 0.94).
 - **Not measured:** accuracy on recorded human speech, noisy audio, or any real TTS output.
+
+## Natural speech: coarticulation and co-speech body language
+
+**Mouth** (`VisemeTimeline.weights`): each viseme ramps in ~50 ms *before* its event and out ~60 ms after, neighbours
+overlap and blend by dominance (Cohen–Massaro): vowels win over soft consonants (n d k between vowels do not close the
+mouth), lip closures p b m and teeth contacts f v always win (the closure stays visible), and short gaps between words
+(< 0.1 s) are bridged, so the mouth no longer flaps shut between words — it closes only at real pauses
+(10 s of speech: 17 short closures before, 2 after). `lipsync.lookahead` now defaults to 0 (the anticipation is built in).
+
+**Prosody from text** (`phonemizer.textToUnits`): content words carry an `accent` on their most open vowel (function
+words do not), the last content word of each phrase is the strongest; pauses keep the punctuation `mark`
+(`. , ? ! ; :` and Arabic `، ؟ ؛`). Hybrid audio alignment keeps accents and puts the punctuation on the phrase's
+last event (`endMark`).
+
+**Performer** (`robot.performer`, `src/engine/SpeechPerformer.ts`): reads those cues from the timeline (known in advance)
+and layers, in time with the words:
+
+| cue | reaction |
+|---|---|
+| accent | head nod (∝ strength^1.5) · brow raise (only strong words) · hand beat — alternating hands, the arm starts rising 0.3 s *before* the stress, the stroke lands on it (≈ ±30 ms), slower retraction |
+| phrase start | small head lift + glance to alternating sides |
+| `,` `.` | tiny / slow nod; blink at the pause |
+| `?` | head tilts up and rolls, inner brows rise *before* the pause, released after |
+| `!` | strong nod + brow raise |
+
+Audio-only events (no text) get rhythmic accents (≥ 0.45 s apart); live microphone input falls back to loudness
+onsets/peaks. Controls: `robot.performer.intensity` (0..1), `.head`, `.brows`, `.hands`, `.blinks`, `.enabled`;
+`speak({ gestures:false })` keeps nods and brows but no hand beats. The base clips `talkR` / `talkL` are now a calm
+presenting pose; the rhythm comes from the performer.

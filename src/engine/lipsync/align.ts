@@ -42,14 +42,19 @@ export function activeIntervals(env: Float32Array, hop: number, o: { threshold?:
 export function alignTextToActivity(text: string, intervals: Interval[], pauseSplit = 0.18): VisemeEvent[] {
   const units = textToUnits(text);
   const phrases: Unit[][] = [[]];
+  const marks: (string | undefined)[] = []; // punctuation that closed phrase i
   for (const u of units) {
     if (u.kind === "pause") {
-      if (u.dur >= pauseSplit && phrases[phrases.length - 1].length) phrases.push([]);
+      if (u.dur >= pauseSplit && phrases[phrases.length - 1].length) {
+        marks[phrases.length - 1] = u.mark;
+        phrases.push([]);
+      }
       continue;
     }
     phrases[phrases.length - 1].push(u);
   }
   const ph = phrases.filter((p) => p.length);
+  const phMarks = phrases.map((p, i) => (p.length ? marks[i] : undefined)).filter((_, i) => phrases[i].length);
   if (!ph.length || !intervals.length) return [];
   const out: VisemeEvent[] = [];
   const spread = (list: Unit[], ivs: Interval[]) => {
@@ -65,7 +70,7 @@ export function alignTextToActivity(text: string, intervals: Interval[], pauseSp
         const len = iv.end - iv.start;
         const lo = Math.max(a, acc);
         const hi = Math.min(b, acc + len);
-        if (hi > lo) out.push({ time: iv.start + (lo - acc), duration: hi - lo, viseme: u.viseme, weight: u.weight });
+        if (hi > lo) out.push({ time: iv.start + (lo - acc), duration: hi - lo, viseme: u.viseme, weight: u.weight, ...(u.accent ? { accent: u.accent } : {}) });
         acc += len;
       }
       consumed += u.dur;
@@ -73,5 +78,15 @@ export function alignTextToActivity(text: string, intervals: Interval[], pauseSp
   };
   if (ph.length === intervals.length) ph.forEach((p, i) => spread(p, [intervals[i]]));
   else spread(ph.flat(), intervals);
-  return out.sort((x, y) => x.time - y.time);
+  out.sort((x, y) => x.time - y.time);
+  // phrase-closing punctuation rides on the last event of its phrase (the silence itself carries no event)
+  if (ph.length === intervals.length) {
+    ph.forEach((_, i) => {
+      const end = intervals[i].end;
+      let last: VisemeEvent | null = null;
+      for (const e of out) if (e.time < end - 1e-9) last = e;
+      if (last && phMarks[i]) last.endMark = phMarks[i];
+    });
+  }
+  return out;
 }

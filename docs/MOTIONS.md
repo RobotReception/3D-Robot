@@ -36,20 +36,20 @@ Hand-to-chin pose, head tilted and turned away.
 
 ### `talkR`
 
-Light right-hand speech gesture.
+Right hand held in a relaxed speaking pose (beats are added by the SpeechPerformer).
 
 - **Use:** Started automatically by `speak()`; right-hand speech gesture.
-- **Type:** loop, 6.4 s, priority 3, fade in/out 0.45/0.45 s
+- **Type:** loop, 12 s, priority 3, fade in/out 1.1/0.8 s
 - **Channels:** armR, fingersR
 - **Play:** `robot.playAnimation("talkR")` or `{"cmd":"playAnimation","name":"talkR"}`
 - **As data:** [motions/talkR.json](motions/talkR.json) (sampled keyframes, same format you can author)
 
 ### `talkL`
 
-Light left-hand speech gesture.
+Left hand held in a relaxed speaking pose (beats are added by the SpeechPerformer).
 
 - **Use:** Started automatically by `speak()`; left-hand speech gesture.
-- **Type:** loop, 6 s, priority 3, fade in/out 0.45/0.45 s
+- **Type:** loop, 12 s, priority 3, fade in/out 1.1/0.8 s
 - **Channels:** armL, fingersL
 - **Play:** `robot.playAnimation("talkL")` or `{"cmd":"playAnimation","name":"talkL"}`
 - **As data:** [motions/talkL.json](motions/talkL.json) (sampled keyframes, same format you can author)
@@ -59,7 +59,7 @@ Light left-hand speech gesture.
 Friendly raised-hand wave with a welcoming head tilt.
 
 - **Use:** First contact, session start.
-- **Type:** one-shot, 3 s, priority 6, fade in/out 0.2/0.4 s
+- **Type:** one-shot, 3 s, priority 6, fade in/out 0.38/0.5 s
 - **Channels:** armR, fingersR, head, torso
 - **Play:** `robot.playAnimation("greeting")` or `{"cmd":"playAnimation","name":"greeting"}`
 - **As data:** [motions/greeting.json](motions/greeting.json) (sampled keyframes, same format you can author)
@@ -69,7 +69,7 @@ Friendly raised-hand wave with a welcoming head tilt.
 Slow farewell wave finishing with a small bow.
 
 - **Use:** End of conversation.
-- **Type:** one-shot, 3.6 s, priority 6, fade in/out 0.2/0.5 s
+- **Type:** one-shot, 3.6 s, priority 6, fade in/out 0.38/0.6 s
 - **Channels:** armR, fingersR, head, torso
 - **Play:** `robot.playAnimation("goodbye")` or `{"cmd":"playAnimation","name":"goodbye"}`
 - **As data:** [motions/goodbye.json](motions/goodbye.json) (sampled keyframes, same format you can author)
@@ -89,7 +89,7 @@ Right arm extended forward-right, index finger extended.
 Cheerful bounce with arms raised.
 
 - **Use:** Good news, success, celebration.
-- **Type:** one-shot, 2.2 s, priority 6, fade in/out 0.2/0.45 s
+- **Type:** one-shot, 2.2 s, priority 6, fade in/out 0.38/0.55 s
 - **Channels:** armL, armR, fingersL, fingersR, head, torso
 - **Play:** `robot.playAnimation("happy")` or `{"cmd":"playAnimation","name":"happy"}`
 - **As data:** [motions/happy.json](motions/happy.json) (sampled keyframes, same format you can author)

@@ -73,29 +73,33 @@ const thinking: ClipDef = {
   }),
 };
 
+/**
+ * Speaking base pose: hands held in front at a relaxed height with only a very slow drift. The rhythmic motion (beats on
+ * stressed words, nods, brows) comes from the SpeechPerformer, timed to the speech, not from these loops.
+ */
 const talkR: ClipDef = {
-  name: "talkR", duration: 6.4, loop: true, priority: 3, fadeIn: 1.1, fadeOut: 0.8, channels: ["armR", "fingersR"],
-  description: "Light right-hand speech gesture.",
+  name: "talkR", duration: 12, loop: true, priority: 3, fadeIn: 1.1, fadeOut: 0.8, channels: ["armR", "fingersR"],
+  description: "Right hand held in a relaxed speaking pose (beats are added by the SpeechPerformer).",
   pose: (t) => ({
     joints: merge(
       armPose("R", {
-        shoulder: 22 + 7 * w(t, 3.2), abduction: 15 + 3 * w(t, 6.4), elbow: 68 + 14 * w(t, 3.2, 1.2),
-        twist: 12 * w(t, 6.4), wristFlex: 8 * w(t, 1.6),
+        shoulder: 17 + 1.6 * w(t, 12), abduction: 13 + 1.2 * w(t, 6, 1), elbow: 62 + 3 * w(t, 12, 1.2),
+        twist: 9 + 2.5 * w(t, 12, 0.5), wristFlex: 3 + 3 * w(t, 6),
       }),
-      fingerPose("R", { thumb: 0.1, index: 0.1, middle: 0.2, ring: 0.25 }),
+      fingerPose("R", { thumb: 0.12, index: 0.12, middle: 0.2, ring: 0.26 }),
     ),
   }),
 };
 const talkL: ClipDef = {
-  name: "talkL", duration: 6, loop: true, priority: 3, fadeIn: 1.1, fadeOut: 0.8, channels: ["armL", "fingersL"],
-  description: "Light left-hand speech gesture.",
+  name: "talkL", duration: 12, loop: true, priority: 3, fadeIn: 1.1, fadeOut: 0.8, channels: ["armL", "fingersL"],
+  description: "Left hand held in a relaxed speaking pose (beats are added by the SpeechPerformer).",
   pose: (t) => ({
     joints: merge(
       armPose("L", {
-        shoulder: 14 + 5 * w(t, 3, 2), abduction: 13 + 2 * w(t, 6), elbow: 52 + 10 * w(t, 3, 0.4),
-        twist: -8 * w(t, 6, 1), wristFlex: 5 * w(t, 1.5, 1),
+        shoulder: 11 + 1.4 * w(t, 12, 2), abduction: 12 + 1 * w(t, 6), elbow: 48 + 3 * w(t, 12, 0.4),
+        twist: -6 + 2 * w(t, 12, 1), wristFlex: 2 + 2.5 * w(t, 4, 1),
       }),
-      fingerPose("L", { thumb: 0.15, index: 0.15, middle: 0.25, ring: 0.3 }),
+      fingerPose("L", { thumb: 0.16, index: 0.16, middle: 0.26, ring: 0.3 }),
     ),
   }),
 };

@@ -78,6 +78,8 @@ export class FaceController {
   private visemes: Record<string, number> = {};
   private speaking = 0; // smoothed 0..1
   private speakingTarget = 0;
+  private speechBrow = 0;
+  private speechBrowInner = 0;
   private mouthOpen: number | null = null;
   private mouthOpenCur = 0;
 
@@ -121,6 +123,11 @@ export class FaceController {
   /** normalised viseme weights from the lip-sync controller (sum <= 1) */
   setVisemes(w: Record<string, number>) {
     this.visemes = w;
+  }
+  /** extra brow raise (outer / inner, 0..1) on top of the emotion: speech emphasis and questions (SpeechPerformer) */
+  setSpeechBrow(raise: number, inner: number) {
+    this.speechBrow = raise;
+    this.speechBrowInner = inner;
   }
   setSpeaking(on: boolean) {
     this.speakingTarget = on ? 1 : 0;
@@ -175,14 +182,15 @@ export class FaceController {
         this.approach(`${eye}.${m}`, this.pick(eyeSrc, m, side) * (this.eyeOverride ? 1 : this.emotionIntensity), k);
       }
       for (const m of BROW_MORPHS) {
-        this.approach(`${brow}.${m}`, this.pick(emo, m, side) * this.emotionIntensity, k);
+        const extra = m === "browUp" ? this.speechBrow : m === "browInnerUp" ? this.speechBrowInner : 0;
+        this.approach(`${brow}.${m}`, Math.min(1, this.pick(emo, m, side) * this.emotionIntensity + extra), k);
       }
     }
     for (const m of MOUTH_EXPR) {
       this.approach(`Mouth.${m}`, this.pick(emo, m, null) * this.emotionIntensity * attenuation, k);
     }
     // speech: faster tracking than expressions
-    const kv = 1 - Math.exp(-dt / 0.035);
+    const kv = 1 - Math.exp(-dt / 0.025);
     for (const m of VISEME_MORPHS) {
       const key = `Mouth.${m}`;
       const tgt = this.visemes[m] ?? 0;
@@ -228,6 +236,7 @@ export class FaceController {
     this.emotionIntensity = 1;
     this.eyeOverride = null;
     this.visemes = {};
+    this.speechBrow = this.speechBrowInner = 0;
     this.mouthOpen = null;
     this.speakingTarget = 0;
   }

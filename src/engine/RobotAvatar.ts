@@ -14,6 +14,7 @@ import { activeIntervals, alignTextToActivity } from "./lipsync/align";
 import { estimateSpeechDuration, textToVisemeEvents } from "./lipsync/phonemizer";
 import type { VisemeEvent } from "./lipsync/visemes";
 import { inspectRobotModel, loadRobotGLTF, type LoadOptions, type RobotModelParts } from "./loader";
+import { SpeechPerformer } from "./SpeechPerformer";
 import { LocomotionController, type WalkOptions, type WalkReport } from "./LocomotionController";
 import { resolve as resolveWorld, type World } from "./world";
 import { compileMotion, exportMotion, type CompileResult, type MotionEvent, type MotionJson } from "./motionJson";
@@ -131,6 +132,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   readonly animation: AnimationController;
   readonly face: FaceController;
   readonly lipsync: LipSyncController;
+  /** co-speech body language: nods, brows, blinks and hand beats timed to what is being said */
+  readonly performer: SpeechPerformer;
   readonly gaze: GazeController;
   readonly overrides: JointOverrides;
   readonly locomotion: LocomotionController;
@@ -174,6 +177,10 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     if (opts.rng) this.face.rng = opts.rng;
     this.face.autoBlink = opts.autoBlink ?? true;
     this.lipsync = new LipSyncController(this.face);
+    this.performer = new SpeechPerformer(this.joints, this.face, this.lipsync, {
+      rng: opts.rng,
+      armFree: (side) => (this.animation.ownerOf(`arm${side}` as Channel)?.priority ?? 0) <= 3 && this.reach[side].weight < 0.05 && !this.overrides.has(`upperarm_${side}`),
+    });
     this.gaze = new GazeController(this.joints);
     this.gaze.idleWander = opts.idleGaze ?? true;
     if (opts.rng) this.gaze.rng = opts.rng;
@@ -257,12 +264,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   private applyBehaviors(dt: number) {
     const j = this.joints;
     const q = new THREE.Quaternion();
-    // speaking: head bobs with articulation energy
-    const e = this.lipsync.energy;
-    if (e > 0.02) {
-      const s = Math.sin(this.time * Math.PI * 2 * 2.1);
-      j.applyDelta("head", eulerToQuat({ x: -2.2 * e * s, y: 1.4 * e * Math.sin(this.time * 1.7), z: 0.9 * e * Math.sin(this.time * 2.9) }, "YXZ", q));
-    }
+    // speaking: nods, brows, blinks and hand beats from the speech itself
+    this.performer.update(dt);
     // walking: counter-swinging arms + torso twist. An arm that is gesturing / reaching / overridden hands over smoothly
     // (per-arm blend weight), so a wave or a point never makes the arm snap in or out of the walk swing.
     const sw = this.locomotion.gaitSwing();
@@ -748,6 +751,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     const prevEmotion = this.face.emotion;
     if (o.emotion) this.setEmotion(o.emotion);
     const gestures = o.gestures !== false;
+    this.performer.speechGestures = gestures;
     if (gestures) {
       this.animation.play("talkR");
       this.animation.play("talkL");
@@ -874,6 +878,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     const prev = this.face.emotion;
     if (o.emotion) this.setEmotion(o.emotion);
     const gestures = o.gestures !== false;
+    this.performer.speechGestures = gestures;
     if (gestures) {
       this.animation.play("talkR");
       this.animation.play("talkL");
