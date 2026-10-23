@@ -74,7 +74,7 @@ const thinking: ClipDef = {
 };
 
 const talkR: ClipDef = {
-  name: "talkR", duration: 6.4, loop: true, priority: 3, fadeIn: 0.45, fadeOut: 0.45, channels: ["armR", "fingersR"],
+  name: "talkR", duration: 6.4, loop: true, priority: 3, fadeIn: 1.1, fadeOut: 0.8, channels: ["armR", "fingersR"],
   description: "Light right-hand speech gesture.",
   pose: (t) => ({
     joints: merge(
@@ -87,7 +87,7 @@ const talkR: ClipDef = {
   }),
 };
 const talkL: ClipDef = {
-  name: "talkL", duration: 6, loop: true, priority: 3, fadeIn: 0.45, fadeOut: 0.45, channels: ["armL", "fingersL"],
+  name: "talkL", duration: 6, loop: true, priority: 3, fadeIn: 1.1, fadeOut: 0.8, channels: ["armL", "fingersL"],
   description: "Light left-hand speech gesture.",
   pose: (t) => ({
     joints: merge(
@@ -100,8 +100,8 @@ const talkL: ClipDef = {
   }),
 };
 
-const wave = (t: number, d: number, freq: number, amp: number, lift = 1): RawPose => {
-  const e = env(t, d, 0.55, 0.55);
+const wave = (t: number, d: number, freq: number, amp: number, lift = 1, ramp = 0.55): RawPose => {
+  const e = env(t, d, ramp, ramp);
   const swing = e * amp * w(t, 1 / freq);
   return merge(
     armPose("R", { shoulder: 10 * e, abduction: 78 * e * lift, twist: 78 * e, elbow: (96 + swing) * e }),
@@ -110,14 +110,14 @@ const wave = (t: number, d: number, freq: number, amp: number, lift = 1): RawPos
 };
 
 const greeting: ClipDef = {
-  name: "greeting", duration: 3, loop: false, priority: 6, fadeIn: 0.2, fadeOut: 0.4,
+  name: "greeting", duration: 3, loop: false, priority: 6, fadeIn: 0.38, fadeOut: 0.5,
   channels: ["armR", "fingersR", "head", "torso"],
   description: "Friendly raised-hand wave with a welcoming head tilt.",
   pose: (t) => {
-    const e = env(t, 3, 0.55, 0.55);
+    const e = env(t, 3, 0.85, 0.85); // unhurried raise and lower
     return {
       joints: merge(
-        wave(t, 3, 1.9, 24),
+        wave(t, 3, 1.9, 24, 1, 0.85),
         { spine: [2 * e, 0, 0], head: [...headPose({ pitch: 5 * e, roll: 6 * e })] as [number, number, number] },
       ),
       pelvis: [0, -0.008 * e, 0],
@@ -126,7 +126,7 @@ const greeting: ClipDef = {
 };
 
 const goodbye: ClipDef = {
-  name: "goodbye", duration: 3.6, loop: false, priority: 6, fadeIn: 0.2, fadeOut: 0.5,
+  name: "goodbye", duration: 3.6, loop: false, priority: 6, fadeIn: 0.38, fadeOut: 0.6,
   channels: ["armR", "fingersR", "head", "torso"],
   description: "Slow farewell wave finishing with a small bow.",
   pose: (t) => {
@@ -158,7 +158,7 @@ const pointing: ClipDef = {
 };
 
 const happy: ClipDef = {
-  name: "happy", duration: 2.2, loop: false, priority: 6, fadeIn: 0.2, fadeOut: 0.45,
+  name: "happy", duration: 2.2, loop: false, priority: 6, fadeIn: 0.38, fadeOut: 0.55,
   description: "Cheerful bounce with arms raised.",
   pose: (t) => {
     const e = env(t, 2.2, 0.4, 0.5);

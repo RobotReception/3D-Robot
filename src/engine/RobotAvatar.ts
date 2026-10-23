@@ -14,7 +14,8 @@ import { activeIntervals, alignTextToActivity } from "./lipsync/align";
 import { estimateSpeechDuration, textToVisemeEvents } from "./lipsync/phonemizer";
 import type { VisemeEvent } from "./lipsync/visemes";
 import { inspectRobotModel, loadRobotGLTF, type LoadOptions, type RobotModelParts } from "./loader";
-import { LocomotionController, type WalkOptions } from "./LocomotionController";
+import { LocomotionController, type WalkOptions, type WalkReport } from "./LocomotionController";
+import { resolve as resolveWorld, type World } from "./world";
 import { compileMotion, exportMotion, type CompileResult, type MotionEvent, type MotionJson } from "./motionJson";
 import {
   HAND_PRESETS, JOINT_DEFS, JointSpace, armPose, clampEuler, eulerToQuat, fingerPose, headPose, parseBone, rawLimits,
@@ -38,6 +39,10 @@ export type RobotEvents = {
   "speech:end": { interrupted: boolean };
   "walk:start": { x: number; z: number };
   "walk:end": { arrived: boolean };
+  /** a walkTo that could not go as asked: `unreachable` (no route; not started) or `adjusted` (target moved to the nearest free spot) */
+  /** the planned path (start, waypoints around obstacles, target) in world x/z, for drawing */
+  "walk:route": { points: { x: number; z: number }[] };
+  "walk:blocked": { reason: "unreachable" | "adjusted"; x: number; z: number };
   command: { cmd: string; ok: boolean; error?: string };
   error: { message: string };
   appearance: { colors?: Record<string, string>; logo?: boolean };
@@ -174,6 +179,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     if (opts.rng) this.gaze.rng = opts.rng;
     this.overrides = new JointOverrides(this.joints);
     this.locomotion = new LocomotionController(this.joints, this.root);
+    // collision radius from the body width (shoulders + a little arm), e.g. ~0.31 m concierge, ~0.25 m mascot
+    this.locomotion.radius = THREE.MathUtils.clamp(Math.abs(this.joints.restWorldPos("upperarm_L").x) + 0.07, 0.2, 0.4);
     this.reachRest = { L: limbRest(this.joints, ARM_DEF("L")), R: limbRest(this.joints, ARM_DEF("R")) };
     this.stateMachine = new AssistantStateMachine(this);
     for (const name of ["Mat_Glow", "Mat_Face"]) {
@@ -246,8 +253,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     this.walkWasBusy = busy;
   }
 
+  private gaitArmW = { L: 1, R: 1 };
   private applyBehaviors(dt: number) {
-    void dt;
     const j = this.joints;
     const q = new THREE.Quaternion();
     // speaking: head bobs with articulation energy
@@ -256,16 +263,19 @@ export class RobotAvatar extends Emitter<RobotEvents> {
       const s = Math.sin(this.time * Math.PI * 2 * 2.1);
       j.applyDelta("head", eulerToQuat({ x: -2.2 * e * s, y: 1.4 * e * Math.sin(this.time * 1.7), z: 0.9 * e * Math.sin(this.time * 2.9) }, "YXZ", q));
     }
-    // walking: counter-swinging arms + torso twist, only on arms that are not gesturing
+    // walking: counter-swinging arms + torso twist. An arm that is gesturing / reaching / overridden hands over smoothly
+    // (per-arm blend weight), so a wave or a point never makes the arm snap in or out of the walk swing.
     const sw = this.locomotion.gaitSwing();
-    if (sw.amount > 0.02) {
-      for (const [side, v] of [["L", sw.armL], ["R", sw.armR]] as const) {
-        const owner = this.animation.ownerOf(`arm${side}` as Channel);
-        if ((owner?.priority ?? 0) <= 1 && this.reach[side].weight < 0.05 && !this.overrides.has(`upperarm_${side}`)) {
-          j.applyDelta(`upperarm_${side}`, eulerToQuat({ x: -v, y: 0, z: 0 }, "XZY", q));
-          j.applyDelta(`forearm_${side}`, eulerToQuat({ x: -Math.abs(v) * 0.5 - 6 * sw.amount, y: 0, z: 0 }, "XZY", q));
-        }
-      }
+    for (const [side, v] of [["L", sw.armL], ["R", sw.armR]] as const) {
+      const owner = this.animation.ownerOf(`arm${side}` as Channel);
+      const free = (owner?.priority ?? 0) <= 1 && this.reach[side].weight < 0.05 && !this.overrides.has(`upperarm_${side}`);
+      const gw = (this.gaitArmW[side] += ((free ? 1 : 0) - this.gaitArmW[side]) * (1 - Math.exp(-dt / 0.18)));
+      const k = gw * sw.amount;
+      if (k < 1e-3) continue;
+      j.applyDelta(`upperarm_${side}`, eulerToQuat({ x: -v * gw, y: 0, z: 0 }, "XZY", q));
+      j.applyDelta(`forearm_${side}`, eulerToQuat({ x: -Math.abs(v) * 0.5 * gw - 6 * k, y: 0, z: 0 }, "XZY", q));
+    }
+    if (sw.amount > 0.001) {
       j.applyDelta("spine", eulerToQuat({ x: sw.lean, y: sw.spineYaw, z: 0 }, "YXZ", q));
     }
   }
@@ -691,12 +701,37 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
 
   // ================================================================ locomotion
+  /** Walls and furniture the robot must not pass through (null = open floor). The viewer sets this for its environment. */
+  get world(): World | null {
+    return this.locomotion.world;
+  }
+  set world(w: World | null) {
+    this.locomotion.world = w;
+    if (w) {
+      const p = this.root.position;
+      const r = resolveWorld(w, p.x, p.z, this.locomotion.radius);
+      if (r.hit) {
+        p.x = r.x;
+        p.z = r.z;
+        this.locomotion.plantFeetNeutral();
+      }
+    }
+  }
+  /** What the last walkTo did about obstacles: planned route, whether the target was moved, whether it was unreachable. */
+  get lastWalk(): WalkReport {
+    return this.locomotion.lastWalk;
+  }
   walkTo(target: { x: number; z: number }, o: WalkOptions = {}): Promise<boolean> {
     this.emit("walk:start", { x: target.x, z: target.z });
     const p = this.locomotion.walkTo(target.x, target.z, o);
-    return p.then((ok) => {
-      return ok;
-    });
+    const lw = this.locomotion.lastWalk;
+    if (lw.unreachable) this.emit("walk:blocked", { reason: "unreachable", x: target.x, z: target.z });
+    else if (lw.adjusted) this.emit("walk:blocked", { reason: "adjusted", x: target.x, z: target.z });
+    if (!lw.unreachable) {
+      const s = this.root.position;
+      this.emit("walk:route", { points: [{ x: s.x, z: s.z }, ...(lw.route.length ? lw.route : [{ x: target.x, z: target.z }])] });
+    }
+    return p;
   }
   turnTo(yawDegrees: number): Promise<boolean> {
     return this.locomotion.turnTo(yawDegrees);

@@ -7,6 +7,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import type { RobotAvatar } from "../engine/RobotAvatar";
+import type { World } from "../engine/world";
 import { buildLobby, type Lobby, type LobbyBrand } from "./environments/lobby";
 export type { LobbyBrand };
 
@@ -81,6 +82,8 @@ export class RobotViewer {
   private envTex: THREE.Texture;
   private lobby: Lobby | null = null;
   private lobbyBrand: LobbyBrand | null = null;
+  /** what the robots may walk on: the lobby's walls and furniture, or the studio floor (null = unbounded) */
+  world: World | null = null;
   private lobbyEnv: THREE.Texture | null = null;
   private bloomComposer: EffectComposer | null = null;
   private finalComposer: EffectComposer | null = null;
@@ -189,6 +192,7 @@ export class RobotViewer {
   // ---- avatars
   add(avatar: RobotAvatar) {
     this.avatars.add(avatar);
+    avatar.world = this.world;
     this.scene.add(avatar.root);
     avatar.root.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -322,6 +326,7 @@ export class RobotViewer {
       this.scene.environment = this.envTex;
       this.controls.maxDistance = 9;
     }
+    this.setWorld(room ? this.lobby!.world : { bounds: { minX: -5.2, maxX: 5.2, minZ: -5.2, maxZ: 5.2 }, boxes: [], circles: [] });
     this.floor.visible = !room;
     this.grid.visible = !room && this.quality !== "low" && this.light.grid;
     this.ring.visible = !room && this.light.grid;
@@ -329,6 +334,10 @@ export class RobotViewer {
     this.scene.fog = p.color ? new THREE.Fog(p.color, 7, 15) : null;
     (this.floor.material as THREE.MeshStandardMaterial).color.set(p.floor);
     this.renderer.setClearColor(room ? 0xf1eee8 : 0x000000, p.color || room ? 1 : 0);
+  }
+  private setWorld(w: World | null) {
+    this.world = w;
+    for (const a of this.avatars) a.world = w;
   }
   /** brand the lobby (sign, desk logo plate, LED and trim colours); `null` = neutral reception sign */
   async setLobbyBrand(brand: LobbyBrand | null) {

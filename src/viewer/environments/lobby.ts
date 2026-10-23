@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import type { World } from "../../engine/world";
 
 /**
  * Procedural reception lobby (no external assets): polished stone floor, walnut slat feature wall with a backlit
@@ -18,6 +19,8 @@ export interface LobbyBrand {
 
 export interface Lobby {
   group: THREE.Group;
+  /** walls and furniture as walkable-world obstacles (the robot cannot walk through them) */
+  world: World;
   /** brand the sign, desk and trims (null = neutral "RECEPTION" sign) */
   setBrand(brand: LobbyBrand | null): Promise<void>;
   /** room half sizes, used to keep the orbit camera inside */
@@ -29,6 +32,24 @@ const W = 8; // half width (x)
 const Z_BACK = -5.5;
 const Z_FRONT = 7.5;
 const H = 3.4;
+const DESK_Z = -4.0;
+
+/** walls, desk, plants and bench of the lobby as ground-plane obstacles (pure data: usable without a renderer) */
+export function lobbyWorld(): World {
+  return {
+    bounds: { minX: -W + 0.12, maxX: W - 0.04, minZ: Z_BACK + 0.12, maxZ: Z_FRONT - 0.04 },
+    boxes: [
+      { minX: -1.8, maxX: 1.8, minZ: DESK_Z - 0.45, maxZ: DESK_Z + 0.45 }, // reception desk
+      { minX: W - 0.86, maxX: W - 0.24, minZ: -0.6 - 1.12, maxZ: -0.6 + 1.12 }, // lounge bench
+    ],
+    circles: [
+      { x: -2.35, z: DESK_Z + 0.1, r: 0.34 },
+      { x: 2.35, z: DESK_Z + 0.1, r: 0.34 },
+      { x: -W + 0.6, z: Z_BACK + 0.7, r: 0.38 },
+      { x: W - 0.6, z: 2.5, r: 0.38 },
+    ],
+  };
+}
 
 function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void, srgb = true, repeat?: [number, number]) {
   const c = document.createElement("canvas");
@@ -297,7 +318,7 @@ export function buildLobby(): Lobby {
   mesh(new THREE.BoxGeometry(3.6, 0.03, 0.12), ledWarm, 0, H - 0.01, -3.95);
 
   // ---- reception desk (behind the robot): white solid-surface body, walnut top, brass trim, floating LED base
-  const deskZ = -4.0;
+  const deskZ = DESK_Z;
   const desk = mesh(new RoundedBoxGeometry(3.4, 1.0, 0.75, 6, 0.06), deskWhite, 0, 0.56, deskZ, true);
   desk.castShadow = true;
   mesh(new RoundedBoxGeometry(3.55, 0.05, 0.85, 4, 0.02), deskTop, 0, 1.085, deskZ, true);
@@ -445,8 +466,11 @@ export function buildLobby(): Lobby {
     inlay.metalness = 0.3;
   }
 
+  const world = lobbyWorld();
+
   return {
     group,
+    world,
     setBrand,
     bounds: { x: W, zBack: Z_BACK, zFront: Z_FRONT, height: H },
     dispose() {

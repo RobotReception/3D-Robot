@@ -96,12 +96,38 @@ export class StudioCore {
         this.engineN = 0;
       }
     };
+    robot.on("walk:route", (e) => this.showRoute(e.points));
+    robot.on("walk:end", () => this.hideRoute());
     robot.on("*" as never, ((e: { type: string; data: unknown }) => this.pushLog(e.type, e.data)) as never);
     this.viewer.add(robot);
     this.applyGaze();
     (window as unknown as Record<string, unknown>).robot = robot;
     await this.applyBrand(this.brand, true);
     this.emitChange();
+  }
+
+  private routeLine: THREE.Mesh | null = null;
+  /** draw the planned walking route on the floor (around furniture), removed when the walk ends */
+  private showRoute(points: { x: number; z: number }[]) {
+    this.hideRoute();
+    if (points.length < 2) return;
+    const path = new THREE.CurvePath<THREE.Vector3>();
+    for (let i = 1; i < points.length; i++) {
+      path.add(new THREE.LineCurve3(new THREE.Vector3(points[i - 1].x, 0.03, points[i - 1].z), new THREE.Vector3(points[i].x, 0.03, points[i].z)));
+    }
+    const g = new THREE.TubeGeometry(path, Math.max(8, points.length * 24), 0.014, 6, false);
+    const m = new THREE.MeshBasicMaterial({ color: 0x59d0ff, transparent: true, opacity: 0.85, depthTest: false, toneMapped: false });
+    const line = new THREE.Mesh(g, m);
+    line.renderOrder = 998;
+    this.routeLine = line;
+    this.viewer.scene.add(line);
+  }
+  private hideRoute() {
+    if (!this.routeLine) return;
+    this.routeLine.removeFromParent();
+    this.routeLine.geometry.dispose();
+    (this.routeLine.material as THREE.Material).dispose();
+    this.routeLine = null;
   }
 
   pushLog(type: string, data: unknown) {

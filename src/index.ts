@@ -1,5 +1,7 @@
 /** Robot Avatar Engine - public API */
 export { RobotAvatar } from "./engine/RobotAvatar";
+export { findPath, resolve as resolveCollision, nearestFree, isFree, emptyWorld } from "./engine/world";
+export type { World, WorldBox, WorldCircle, Point2 } from "./engine/world";
 export type {
   RobotEvents, SpeakOptions, SpeechHandle, StreamSpeechOptions, StreamSpeechHandle, AnimationHandle, Vec3, RobotAvatarOptions,
 } from "./engine/RobotAvatar";
