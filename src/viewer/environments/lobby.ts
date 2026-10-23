@@ -6,8 +6,20 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
  * sign, reception desk, floor-to-ceiling glass wall with daylight, plants, lounge bench and ceiling downlights.
  * Units are metres; the robot stands at the origin facing +Z, the desk is behind it.
  */
+/** a university / company identity for the room: backlit sign, desk logo plate and brand-coloured LED/trim */
+export interface LobbyBrand {
+  logo: string;
+  nameAr: string;
+  nameEn: string;
+  /** main brand colour (LED lines, sign underline) and accent (desk inlay, sign rule) */
+  primary: string;
+  accent: string;
+}
+
 export interface Lobby {
   group: THREE.Group;
+  /** brand the sign, desk and trims (null = neutral "RECEPTION" sign) */
+  setBrand(brand: LobbyBrand | null): Promise<void>;
   /** room half sizes, used to keep the orbit camera inside */
   bounds: { x: number; zBack: number; zFront: number; height: number };
   dispose(): void;
@@ -214,6 +226,8 @@ export function buildLobby(): Lobby {
   const deskTop = keep(new THREE.MeshStandardMaterial({ map: deskTopTex, roughness: 0.4 }));
   const darkMetal = keep(new THREE.MeshStandardMaterial({ color: 0x1d1f23, roughness: 0.4, metalness: 0.8 }));
   const brass = keep(new THREE.MeshStandardMaterial({ color: 0xb08d57, roughness: 0.3, metalness: 1 }));
+  const inlay = keep(new THREE.MeshStandardMaterial({ color: 0xb08d57, roughness: 0.3, metalness: 1 }));
+  const deskLed = keep(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xfff1dc, emissiveIntensity: 2.2 }));
   const ledWarm = keep(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xfff1dc, emissiveIntensity: 2.2 }));
   const downlight = keep(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xfff6e8, emissiveIntensity: 3 }));
   const glass = keep(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.1, depthWrite: false }));
@@ -238,8 +252,15 @@ export function buildLobby(): Lobby {
   feature.receiveShadow = true;
   // backlit sign floating on the feature wall
   const signTex = keep(signTexture());
-  const sign = mesh(new THREE.PlaneGeometry(2.2, 0.55), keep(new THREE.MeshStandardMaterial({ map: signTex, transparent: true, color: 0x000000, emissive: 0xfff3df, emissiveMap: signTex, emissiveIntensity: 1.6 })), 0, 2.45, Z_BACK + 0.1);
+  const signMat = keep(new THREE.MeshStandardMaterial({ map: signTex, transparent: true, color: 0x000000, emissive: 0xfff3df, emissiveMap: signTex, emissiveIntensity: 1.6 }));
+  const SIGN_X = 1.85, SIGN_Y = 2.35; // beside the robot's head, not behind it
+  const sign = mesh(new THREE.PlaneGeometry(2.2, 0.55), signMat, SIGN_X, SIGN_Y, Z_BACK + 0.1);
   sign.receiveShadow = false;
+  // brand logo plate on the front of the reception desk (hidden until a brand is set)
+  const deskLogoMat = keep(new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  const deskLogo = mesh(new THREE.PlaneGeometry(1.5, 0.375), deskLogoMat, -0.95, 0.58, -4.0 + 0.377 + 0.002);
+  deskLogo.visible = false;
+  deskLogo.receiveShadow = false;
   // warm wall-washer slot above the feature wall
   mesh(new THREE.BoxGeometry(7, 0.03, 0.06), ledWarm, 0, H - 0.04, Z_BACK + 0.2);
   // front wall (behind the camera) and right wall: plaster
@@ -281,8 +302,8 @@ export function buildLobby(): Lobby {
   desk.castShadow = true;
   mesh(new RoundedBoxGeometry(3.55, 0.05, 0.85, 4, 0.02), deskTop, 0, 1.085, deskZ, true);
   mesh(new THREE.BoxGeometry(3.3, 0.06, 0.65), darkMetal, 0, 0.03, deskZ); // recessed plinth
-  mesh(new THREE.BoxGeometry(3.25, 0.012, 0.012), ledWarm, 0, 0.07, deskZ + 0.33); // floating LED line
-  mesh(new THREE.BoxGeometry(3.42, 0.012, 0.012), brass, 0, 0.82, deskZ + 0.376); // brass inlay
+  mesh(new THREE.BoxGeometry(3.25, 0.012, 0.012), deskLed, 0, 0.07, deskZ + 0.33); // floating LED line
+  mesh(new THREE.BoxGeometry(3.42, 0.012, 0.012), inlay, 0, 0.82, deskZ + 0.376); // brass inlay
   // monitor + small items on the desk
   mesh(new THREE.BoxGeometry(0.62, 0.38, 0.025), screenMat, -0.7, 1.36, deskZ - 0.12, true).rotation.y = 0.12;
   mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 12), darkMetal, -0.7, 1.17, deskZ - 0.14);
@@ -351,10 +372,85 @@ export function buildLobby(): Lobby {
   wallWash.target.position.set(0, 1.4, Z_BACK);
   group.add(wallWash, wallWash.target);
 
+  const loader = new THREE.TextureLoader();
+  let brandToken = 0;
+  let brandTex: THREE.Texture[] = []; // textures made for the current brand, released when it changes
+  const dropBrandTex = () => {
+    brandTex.forEach((x) => x.dispose());
+    brandTex = [];
+  };
+  async function setBrand(brand: LobbyBrand | null) {
+    const token = ++brandToken;
+    if (!brand) {
+      dropBrandTex();
+      const neutral = keep(signTexture());
+      signMat.map = signMat.emissiveMap = neutral;
+      sign.geometry.dispose();
+      sign.geometry = new THREE.PlaneGeometry(2.2, 0.55);
+      signMat.needsUpdate = true;
+      deskLogo.visible = false;
+      deskLed.emissive.set(0xfff1dc);
+      inlay.color.set(0xb08d57);
+      return;
+    }
+    const logo = (await loader.loadAsync(brand.logo)).image as HTMLImageElement;
+    if (token !== brandToken) return; // a newer setBrand call won
+    // sign: logo + Arabic and Latin names + a two-colour rule, white on the walnut wall
+    const sTex = (canvasTex(2048, 640, (g) => {
+      g.clearRect(0, 0, 2048, 640);
+      const lh = 560, lw = lh * (logo.width / logo.height);
+      g.drawImage(logo, 40, 40, lw, lh);
+      const x0 = 40 + lw + 70, cx = x0 + (2048 - x0 - 40) / 2;
+      g.fillStyle = "#ffffff";
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.font = "700 210px 'Segoe UI', Tahoma, Arial, sans-serif";
+      g.fillText(brand.nameAr, cx, 190);
+      g.font = "600 92px 'Segoe UI', Arial, sans-serif";
+      g.fillText(brand.nameEn.toUpperCase().split("").join(" "), cx, 390);
+      g.fillStyle = brand.primary;
+      g.fillRect(x0 + 20, 480, (2048 - x0 - 80) * 0.62, 12);
+      g.fillStyle = brand.accent;
+      g.fillRect(x0 + 20 + (2048 - x0 - 80) * 0.62, 480, (2048 - x0 - 80) * 0.38, 12);
+    }));
+    signMat.map = signMat.emissiveMap = sTex;
+    signMat.emissive.set(0xffffff);
+    sign.geometry.dispose();
+    sign.geometry = new THREE.PlaneGeometry(2.5, 2.5 * 640 / 2048);
+    signMat.needsUpdate = true;
+    // desk plate: logo on the white front panel with the Latin name underneath
+    const dTex = (canvasTex(1536, 384, (g) => {
+      g.clearRect(0, 0, 1536, 384);
+      const lh = 340, lw = lh * (logo.width / logo.height);
+      g.drawImage(logo, 20, 22, lw, lh);
+      g.fillStyle = "#26323f";
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      g.font = "700 120px 'Segoe UI', Tahoma, Arial, sans-serif";
+      g.fillText(brand.nameAr, lw + 70, 120);
+      g.font = "600 64px 'Segoe UI', Arial, sans-serif";
+      g.fillText(brand.nameEn.toUpperCase(), lw + 70, 250);
+      g.fillStyle = brand.primary;
+      g.fillRect(lw + 70, 310, 360, 10);
+      g.fillStyle = brand.accent;
+      g.fillRect(lw + 430, 310, 190, 10);
+    }));
+    dropBrandTex();
+    brandTex = [sTex, dTex];
+    deskLogoMat.map = dTex;
+    deskLogoMat.needsUpdate = true;
+    deskLogo.visible = true;
+    deskLed.emissive.set(brand.primary);
+    inlay.color.set(brand.accent);
+    inlay.metalness = 0.3;
+  }
+
   return {
     group,
+    setBrand,
     bounds: { x: W, zBack: Z_BACK, zFront: Z_FRONT, height: H },
     dispose() {
+      dropBrandTex();
       disposables.forEach((d) => d.dispose());
       group.removeFromParent();
     },

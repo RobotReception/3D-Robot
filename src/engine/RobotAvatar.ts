@@ -949,6 +949,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
 
   dispose() {
+    this.removeLogo(); // releases the logo texture (material.dispose() does not)
     this.stopSpeech();
     this.animation.dispose();
     this.audio?.dispose();

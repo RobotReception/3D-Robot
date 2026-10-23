@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { RobotAvatar, type ColorPart } from "../engine/RobotAvatar";
-import { RobotViewer, type BackgroundPreset, type CameraPreset, type QualityLevel } from "../viewer/RobotViewer";
+import { BRAND_PRESETS, DEFAULT_BRAND } from "./brands";
+import { RobotViewer, type BackgroundPreset, type CameraPreset, type LobbyBrand, type QualityLevel } from "../viewer/RobotViewer";
 import { JOINT_DEFS, REQUIRED_BONES } from "../engine/rig";
 
 export type Style = "friendly" | "futuristic" | "premium" | "concierge" | "mascot";
@@ -10,6 +11,8 @@ export interface BrandState {
   preset: string | null;
   colors: Partial<Record<ColorPart, string>>;
   logo: string | null;
+  /** sign / desk branding of the lobby (kept while colours are edited) */
+  lobby: LobbyBrand | null;
   logoSize: number;
   placement: "auto" | "center" | "left";
 }
@@ -39,7 +42,14 @@ export class StudioCore {
   private cleanup: (() => void)[] = [];
   private raycaster = new THREE.Raycaster();
   listeners = new Set<() => void>();
-  brand: BrandState = { preset: null, colors: {}, logo: null, logoSize: 0.11, placement: "auto" };
+  /** starts with the Al-Razi University identity (Brand tab: "Original" removes it) */
+  brand: BrandState = (() => {
+    const p = BRAND_PRESETS[DEFAULT_BRAND];
+    return {
+      preset: DEFAULT_BRAND, colors: p.colors, logo: assetUrl(p.logo!), logoSize: 0.11, placement: "auto" as const,
+      lobby: p.lobby ? { ...p.lobby, logo: assetUrl(p.logo!) } : null,
+    };
+  })();
   onBoneSelected?: (bone: string) => void;
 
   async init(container: HTMLElement) {
@@ -107,6 +117,7 @@ export class StudioCore {
     const r = this.robot;
     r.resetColors();
     r.setColors(b.colors);
+    if (JSON.stringify(b.lobby) !== JSON.stringify(prev.lobby) || force) void this.viewer.setLobbyBrand(b.lobby); // not on every colour tweak
     if (force || b.logo !== prev.logo || b.logoSize !== prev.logoSize || b.placement !== prev.placement || !r.hasLogo !== !b.logo) {
       const size = b.placement === "left" || (b.placement === "auto" && r.parts.materials.has("Mat_Uniform")) ? b.logoSize * 0.68 : b.logoSize;
       await r.setLogo(b.logo, { size, placement: b.placement === "auto" ? undefined : b.placement });

@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import type { ColorPart } from "../../engine/RobotAvatar";
+import { BRAND_PRESETS } from "../brands";
 import { assetUrl } from "../core";
 import { useCoreChange, useStudio } from "../StudioContext";
 import { Chip, Row, Section, Slider } from "../ui";
@@ -15,17 +16,6 @@ const PARTS: { part: ColorPart; label: string }[] = [
   { part: "light", label: "Lights" },
 ];
 
-/** ready-made brand looks: colours (any part a model lacks is skipped) + optional chest logo */
-export const BRAND_PRESETS: Record<string, { colors: Partial<Record<ColorPart, string>>; logo?: string }> = {
-  "Al-Razi University": {
-    colors: { body: "#f5f7fa", trim: "#acd9e7", uniform: "#0080c6", joints: "#1d3d5c", accent: "#f78a2c", visor: "#02060c", eyes: "#7fd3ff", light: "#0080c6" },
-    logo: "logos/alrazi.png",
-  },
-  "Midnight": { colors: { body: "#eef1f5", trim: "#9aa6b8", uniform: "#0b1730", joints: "#1a1f29", accent: "#c9a46a", eyes: "#6fd6ff", light: "#3aa8ff" } },
-  "Graphite": { colors: { body: "#2b2f36", trim: "#454c57", uniform: "#16191e", joints: "#0f1114", accent: "#b8bec8", eyes: "#9ff0ff", light: "#62e0ff" } },
-  "Emerald": { colors: { body: "#f4f6f5", trim: "#b9d8cc", uniform: "#0e5a43", joints: "#17251f", accent: "#d4af37", eyes: "#7dffcf", light: "#2fd39a" } },
-};
-
 export function BrandPanel() {
   const { core, t } = useStudio();
   useCoreChange();
@@ -37,9 +27,9 @@ export function BrandPanel() {
       <Section title={t("Brand presets")}>
         <Row>
           {Object.entries(BRAND_PRESETS).map(([name, p]) => (
-            <Chip key={name} active={b.preset === name} onClick={() => void core.applyBrand({ preset: name, colors: p.colors, logo: p.logo ? assetUrl(p.logo) : null })} testId={`brand-${name}`}>{t(name)}</Chip>
+            <Chip key={name} active={b.preset === name} onClick={() => void core.applyBrand({ preset: name, colors: p.colors, logo: p.logo ? assetUrl(p.logo) : null, lobby: p.lobby ? { ...p.lobby, logo: assetUrl(p.logo ?? "") } : null })} testId={`brand-${name}`}>{t(name)}</Chip>
           ))}
-          <Chip onClick={() => void core.applyBrand({ preset: null, colors: {}, logo: null })} testId="brand-reset">{t("Original")}</Chip>
+          <Chip onClick={() => void core.applyBrand({ preset: null, colors: {}, logo: null, lobby: null })} testId="brand-reset">{t("Original")}</Chip>
         </Row>
       </Section>
       <Section title={t("Colors")}>

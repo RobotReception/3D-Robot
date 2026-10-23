@@ -7,7 +7,8 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import type { RobotAvatar } from "../engine/RobotAvatar";
-import { buildLobby, type Lobby } from "./environments/lobby";
+import { buildLobby, type Lobby, type LobbyBrand } from "./environments/lobby";
+export type { LobbyBrand };
 
 export type QualityLevel = "low" | "medium" | "high";
 export type CameraPreset = "full" | "upper" | "face" | "side" | "back";
@@ -79,6 +80,7 @@ export class RobotViewer {
   private grid: THREE.GridHelper;
   private envTex: THREE.Texture;
   private lobby: Lobby | null = null;
+  private lobbyBrand: LobbyBrand | null = null;
   private lobbyEnv: THREE.Texture | null = null;
   private bloomComposer: EffectComposer | null = null;
   private finalComposer: EffectComposer | null = null;
@@ -328,10 +330,16 @@ export class RobotViewer {
     (this.floor.material as THREE.MeshStandardMaterial).color.set(p.floor);
     this.renderer.setClearColor(room ? 0xf1eee8 : 0x000000, p.color || room ? 1 : 0);
   }
+  /** brand the lobby (sign, desk logo plate, LED and trim colours); `null` = neutral reception sign */
+  async setLobbyBrand(brand: LobbyBrand | null) {
+    this.lobbyBrand = brand;
+    await this.lobby?.setBrand(brand);
+  }
   /** build the lobby once, capture its reflections into the environment map, keep the camera inside the room */
   private enterLobby() {
     if (!this.lobby) {
       this.lobby = buildLobby();
+      void this.lobby.setBrand(this.lobbyBrand);
       const capture = new THREE.Scene();
       capture.add(this.lobby.group);
       this.lobbyEnv = this.pmrem.fromScene(capture, 0.02, 0.1, 40, { position: new THREE.Vector3(0, 1.3, 1.2) }).texture;
