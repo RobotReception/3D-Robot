@@ -217,7 +217,7 @@ function parseSegment(seg: string, original: string): RobotAction[] | null {
   if (/^(?:اغمز|wink)(?: .*)?$/.test(s)) return [{ type: "blink", side: "left" }];
 
   // ---- point
-  if (/^(?:اشر|اشير|شير|وجه يدك|point|show)(?: |$)/.test(s)) {
+  if (/^(?:اشر|اشير|شير|وجه يدك|point|show(?! (?:me|us)? ?(?:the )?(?:way|where|how|around)))(?: |$)/.test(s)) {
     if (place) return [{ type: "point", target: { place } }];
     return [{ type: "point", target: test(LEFT, s) ? "left" : test(RIGHT, s) ? "right" : "forward" }];
   }

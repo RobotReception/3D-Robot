@@ -120,7 +120,7 @@ describe("NOT orders: left to the LLM", () => {
   it.each([
     "كيف أتقدم بطلب القبول؟", "ما هي شروط القبول؟", "لا تتقدم", "لا تمش", "don't move", "do not turn around", "never go there",
     "قل لي ما اسمك", "tell me a joke", "what do you do here", "hello", "مرحبا", "who are you", "اين المكتب؟", "متى يفتح الباب",
-    "I want to go to sleep", "go to sleep", "the desk is nice", "هل المكتب قريب", "turn", "how do I walk to the library",
+    "I want to go to sleep", "go to sleep", "the desk is nice", "هل المكتب قريب", "turn", "how do I walk to the library", "Could you show me the way to the reception desk?", "show me where the desk is", "show us around",
     "تقدم بطلب للتسجيل في الجامعة وارسل الاوراق المطلوبة الى القسم المختص قبل نهاية الشهر الحالي من فضلك", "", "   ",
   ])("%s", (text) => {
     expect(A(text)).toBeNull();

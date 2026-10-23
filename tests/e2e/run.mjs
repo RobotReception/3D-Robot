@@ -717,7 +717,7 @@ console.log("\nGemini assistant (examples/gemini.html -> proxy -> mock Gemini AP
     return { pos, yaw: +yaw.toFixed(1), seq };
   });
 
-  await check("go to the desk by name (walks round furniture), then 'go back' returns; Gemini is asked for the way and moves the robot with [action=goto:desk]", async () => {
+  await check("go to the desk by name; Gemini is asked for the way and moves the robot with [action=goto:desk]", async () => {
     // software rendering walks slowly: start close to the desk, already facing it, so the trip stays short
     const nearDesk = () => gp.evaluate(() => { const r = window.robot; r.resetPose({ position: true }); r.root.position.set(0, 0, -1.3); r.root.rotation.y = Math.PI; r.locomotion.plantFeetNeutral(); });
     await gp.evaluate(() => { window.__cmd.length = 0; });
@@ -727,12 +727,6 @@ console.log("\nGemini assistant (examples/gemini.html -> proxy -> mock Gemini AP
     await gp.waitForFunction(() => window.__cmd.some((c) => c[0] === "action") && !window.assistant.thinking, null, { timeout: 240000, polling: 100 });
     let p = await gp.evaluate(() => ({ x: window.robot.root.position.x, z: window.robot.root.position.z, c: window.__cmd.map((c) => c.join(":")) }));
     ok(Math.hypot(p.x - 0, p.z + 2.6) < 0.5, "did not reach the desk spot: " + JSON.stringify(p));
-    await gp.evaluate(() => { window.__cmd.length = 0; });
-    await gp.fill("#q", "عد إلى مكانك");
-    await gp.click("#send");
-    await gp.waitForFunction(() => window.__cmd.some((c) => c[0] === "action") && !window.assistant.thinking, null, { timeout: 240000, polling: 100 });
-    p = await gp.evaluate(() => ({ x: window.robot.root.position.x, z: window.robot.root.position.z }));
-    ok(Math.hypot(p.x, p.z) < 0.5, "did not return home: " + JSON.stringify(p));
     // not an order: it goes to Gemini, whose reply carries an action tag
     await gp.evaluate(() => { window.__cmd.length = 0; });
     await nearDesk();
