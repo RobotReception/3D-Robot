@@ -14,11 +14,19 @@ a **Control Studio** to test everything.
 
 ![Concierge](docs/screenshots/concierge-sheet.png)
 ![Mascot](docs/screenshots/mascot-sheet.png)
-*New **Mascot**: original chibi assistant (huge head, glowing ring accents, soft ^ ^ eyes).*
+*New **Mascot**: 92 cm chibi assistant (helmet head with inset glossy visor + cyan face, silver headphone pods, glowing neck ring, chest emblem/logo spot, chubby fingers).*
 
-*New **Concierge**: detailed human-proportion receptionist (panelled shell, navy uniform, glowing ring joints, selective bloom). Default in the Studio — see [docs/DESIGN.md](docs/DESIGN.md) for an honest comparison with photo-realistic concepts.*
+*New **Concierge**: receptionist robot redesigned after the reference sheet (rounded helmet with black visor + cyan LED face, headphone pods, navy vest over white shirt and tie, gold medallion, charcoal joints, cyan-lined shoes). Default in the Studio — see [docs/DESIGN.md](docs/DESIGN.md) for an honest comparison with photo-realistic concepts.*
 
 ![Control Studio](docs/screenshots/studio-cam-full.png)
+
+**Environment:** the Studio opens in a procedural reception **lobby** (polished stone floor, walnut slat feature wall with a backlit sign, reception desk, glass wall with daylight, plants, downlights). Reflections on the robot come from the room itself. Switch with *Background* (`lobby`, `studio`, `light`, ...) or `viewer.setBackground("lobby")`.
+
+## تشغيل سريع على جهازك (localhost)
+
+1. ثبّت [Node.js](https://nodejs.org) (الإصدار 20 أو أحدث) ونزّل المشروع (`git clone` ثم `git checkout claude/awesome-noether-ve29yd`، أو Download ZIP).
+2. **ويندوز:** انقر مرتين على `run-local.bat` — **ماك/لينكس:** `./run-local.sh`.
+3. سيفتح المتصفح على **http://localhost:5173** (أول مرة يثبّت الحزم تلقائيًا).
 
 ## Quick start
 
@@ -77,6 +85,7 @@ Works with plain three.js ([examples/minimal.html](examples/minimal.html)) and R
 | Robot API, state machine, JSON bridge | `src/engine/{RobotAvatar,stateMachine,commands,bridge}.ts` | [docs/API.md](docs/API.md), [docs/COMMANDS.md](docs/COMMANDS.md) |
 | Viewer (quality tiers, camera) | `src/viewer/RobotViewer.ts` | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) |
 | Control Studio | `src/studio/` | [docs/STUDIO.md](docs/STUDIO.md) |
+| **Ask a question → the robot answers (Gemini)** | `src/engine/assistant.ts`, `examples/gemini/` | [docs/GEMINI.md](docs/GEMINI.md) |
 | Tests | `tests/` | [docs/TESTING.md](docs/TESTING.md) |
 | Integration guide | | [docs/INTEGRATION.md](docs/INTEGRATION.md) |
 

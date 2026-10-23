@@ -1,5 +1,12 @@
 /** Robot Avatar Engine - public API */
 export { RobotAvatar } from "./engine/RobotAvatar";
+export { RobotAssistant, DirectiveParser, SentenceChunker, pcmEnvelope, listenOnce, speechRecognitionAvailable } from "./engine/assistant";
+export type { ChatBackend, ChatRequest, ChatMessage, TtsBackend, AssistantRobot, AssistantOptions, AskResult, Directive } from "./engine/assistant";
+export { ProxyChatBackend, ProxyTtsBackend } from "./engine/backends/proxy";
+export { buildSystemPrompt, ASSISTANT_EMOTIONS, ASSISTANT_GESTURES } from "./engine/assistantPrompt";
+export type { PromptOptions } from "./engine/assistantPrompt";
+export { findPath, resolve as resolveCollision, nearestFree, isFree, emptyWorld } from "./engine/world";
+export type { World, WorldBox, WorldCircle, Point2 } from "./engine/world";
 export type {
   RobotEvents, SpeakOptions, SpeechHandle, StreamSpeechOptions, StreamSpeechHandle, AnimationHandle, Vec3, RobotAvatarOptions,
 } from "./engine/RobotAvatar";

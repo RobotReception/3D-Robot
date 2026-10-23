@@ -14,7 +14,9 @@ import { activeIntervals, alignTextToActivity } from "./lipsync/align";
 import { estimateSpeechDuration, textToVisemeEvents } from "./lipsync/phonemizer";
 import type { VisemeEvent } from "./lipsync/visemes";
 import { inspectRobotModel, loadRobotGLTF, type LoadOptions, type RobotModelParts } from "./loader";
-import { LocomotionController, type WalkOptions } from "./LocomotionController";
+import { SpeechPerformer } from "./SpeechPerformer";
+import { LocomotionController, type WalkOptions, type WalkReport } from "./LocomotionController";
+import { resolve as resolveWorld, type World } from "./world";
 import { compileMotion, exportMotion, type CompileResult, type MotionEvent, type MotionJson } from "./motionJson";
 import {
   HAND_PRESETS, JOINT_DEFS, JointSpace, armPose, clampEuler, eulerToQuat, fingerPose, headPose, parseBone, rawLimits,
@@ -38,8 +40,13 @@ export type RobotEvents = {
   "speech:end": { interrupted: boolean };
   "walk:start": { x: number; z: number };
   "walk:end": { arrived: boolean };
+  /** a walkTo that could not go as asked: `unreachable` (no route; not started) or `adjusted` (target moved to the nearest free spot) */
+  /** the planned path (start, waypoints around obstacles, target) in world x/z, for drawing */
+  "walk:route": { points: { x: number; z: number }[] };
+  "walk:blocked": { reason: "unreachable" | "adjusted"; x: number; z: number };
   command: { cmd: string; ok: boolean; error?: string };
   error: { message: string };
+  appearance: { colors?: Record<string, string>; logo?: boolean };
 };
 
 export interface AnimationHandle extends PlayResult {
@@ -87,6 +94,8 @@ export interface StreamSpeechHandle {
   pushVisemes(events: VisemeEvent[]): void;
   end(): void;
   stop(): void;
+  /** seconds of the audio stream played so far (the clock the visemes and gesture cues run on) */
+  time(): number;
   finished: Promise<void>;
 }
 
@@ -125,6 +134,8 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   readonly animation: AnimationController;
   readonly face: FaceController;
   readonly lipsync: LipSyncController;
+  /** co-speech body language: nods, brows, blinks and hand beats timed to what is being said */
+  readonly performer: SpeechPerformer;
   readonly gaze: GazeController;
   readonly overrides: JointOverrides;
   readonly locomotion: LocomotionController;
@@ -143,6 +154,9 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   private speechToken = 0;
   private glowBase = new Map<THREE.Material, { color: THREE.Color; intensity: number }>();
   private glowBoost = 0;
+  private baseColors = new Map<ColorPart, string>();
+  private logoAnchors: Record<LogoPlacement, { pos: THREE.Vector3; normal: THREE.Vector3 } | null> = { center: null, left: null };
+  private logo: THREE.Mesh | null = null;
 
   constructor(parts: RobotModelParts, opts: RobotAvatarOptions = {}) {
     super();
@@ -165,16 +179,26 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     if (opts.rng) this.face.rng = opts.rng;
     this.face.autoBlink = opts.autoBlink ?? true;
     this.lipsync = new LipSyncController(this.face);
+    this.performer = new SpeechPerformer(this.joints, this.face, this.lipsync, {
+      rng: opts.rng,
+      armFree: (side) => (this.animation.ownerOf(`arm${side}` as Channel)?.priority ?? 0) <= 3 && this.reach[side].weight < 0.05 && !this.overrides.has(`upperarm_${side}`),
+    });
     this.gaze = new GazeController(this.joints);
     this.gaze.idleWander = opts.idleGaze ?? true;
     if (opts.rng) this.gaze.rng = opts.rng;
     this.overrides = new JointOverrides(this.joints);
     this.locomotion = new LocomotionController(this.joints, this.root);
+    // collision radius from the body width (shoulders + a little arm), e.g. ~0.31 m concierge, ~0.25 m mascot
+    this.locomotion.radius = THREE.MathUtils.clamp(Math.abs(this.joints.restWorldPos("upperarm_L").x) + 0.07, 0.2, 0.4);
     this.reachRest = { L: limbRest(this.joints, ARM_DEF("L")), R: limbRest(this.joints, ARM_DEF("R")) };
     this.stateMachine = new AssistantStateMachine(this);
     for (const name of ["Mat_Glow", "Mat_Face"]) {
       const mat = parts.materials.get(name) as THREE.MeshStandardMaterial | undefined;
       if (mat) this.glowBase.set(mat, { color: mat.emissive.clone(), intensity: mat.emissiveIntensity });
+    }
+    for (const part of COLOR_PARTS) {
+      const c = this.getColor(part);
+      if (c) this.baseColors.set(part, c);
     }
     this.defaultEmotion = (opts.defaultEmotion ?? parts.defaultEmotion ?? "neutral") as EmotionName;
     this.face.setEmotion(this.defaultEmotion);
@@ -238,26 +262,25 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     this.walkWasBusy = busy;
   }
 
+  private gaitArmW = { L: 1, R: 1 };
   private applyBehaviors(dt: number) {
-    void dt;
     const j = this.joints;
     const q = new THREE.Quaternion();
-    // speaking: head bobs with articulation energy
-    const e = this.lipsync.energy;
-    if (e > 0.02) {
-      const s = Math.sin(this.time * Math.PI * 2 * 2.1);
-      j.applyDelta("head", eulerToQuat({ x: -2.2 * e * s, y: 1.4 * e * Math.sin(this.time * 1.7), z: 0.9 * e * Math.sin(this.time * 2.9) }, "YXZ", q));
-    }
-    // walking: counter-swinging arms + torso twist, only on arms that are not gesturing
+    // speaking: nods, brows, blinks and hand beats from the speech itself
+    this.performer.update(dt);
+    // walking: counter-swinging arms + torso twist. An arm that is gesturing / reaching / overridden hands over smoothly
+    // (per-arm blend weight), so a wave or a point never makes the arm snap in or out of the walk swing.
     const sw = this.locomotion.gaitSwing();
-    if (sw.amount > 0.02) {
-      for (const [side, v] of [["L", sw.armL], ["R", sw.armR]] as const) {
-        const owner = this.animation.ownerOf(`arm${side}` as Channel);
-        if ((owner?.priority ?? 0) <= 1 && this.reach[side].weight < 0.05 && !this.overrides.has(`upperarm_${side}`)) {
-          j.applyDelta(`upperarm_${side}`, eulerToQuat({ x: -v, y: 0, z: 0 }, "XZY", q));
-          j.applyDelta(`forearm_${side}`, eulerToQuat({ x: -Math.abs(v) * 0.5 - 6 * sw.amount, y: 0, z: 0 }, "XZY", q));
-        }
-      }
+    for (const [side, v] of [["L", sw.armL], ["R", sw.armR]] as const) {
+      const owner = this.animation.ownerOf(`arm${side}` as Channel);
+      const free = (owner?.priority ?? 0) <= 1 && this.reach[side].weight < 0.05 && !this.overrides.has(`upperarm_${side}`);
+      const gw = (this.gaitArmW[side] += ((free ? 1 : 0) - this.gaitArmW[side]) * (1 - Math.exp(-dt / 0.18)));
+      const k = gw * sw.amount;
+      if (k < 1e-3) continue;
+      j.applyDelta(`upperarm_${side}`, eulerToQuat({ x: -v * gw, y: 0, z: 0 }, "XZY", q));
+      j.applyDelta(`forearm_${side}`, eulerToQuat({ x: -Math.abs(v) * 0.5 * gw - 6 * k, y: 0, z: 0 }, "XZY", q));
+    }
+    if (sw.amount > 0.001) {
       j.applyDelta("spine", eulerToQuat({ x: sw.lean, y: sw.spineYaw, z: 0 }, "YXZ", q));
     }
   }
@@ -422,6 +445,122 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     for (const [mat] of this.glowBase) if (mat.name === "Mat_Face") (mat as THREE.MeshStandardMaterial).emissive.set(color);
   }
 
+  // ================================================================ appearance (brand colours + chest logo)
+  /** Recolour parts of the robot at runtime, e.g. `setColors({ body: "#ffffff", uniform: "#0080c6", accent: "#f78a2c" })`.
+   *  Parts a model doesn't have (e.g. `uniform` on non-concierge styles) are ignored. */
+  setColors(colors: Partial<Record<ColorPart, THREE.ColorRepresentation>>) {
+    for (const [part, value] of Object.entries(colors) as [ColorPart, THREE.ColorRepresentation][]) {
+      if (value == null) continue;
+      const mat = this.parts.materials.get(COLOR_MATERIAL[part]) as THREE.MeshStandardMaterial | undefined;
+      if (!mat) continue;
+      if (part === "light" || part === "eyes") {
+        mat.emissive.set(value);
+        const base = this.glowBase.get(mat);
+        if (base) base.color.copy(mat.emissive);
+      } else mat.color.set(value);
+    }
+    this.emit("appearance", { colors: this.getColors() });
+  }
+  /** Current colours as "#rrggbb" (sRGB) for every part this model has. */
+  getColors(): Partial<Record<ColorPart, string>> {
+    const out: Partial<Record<ColorPart, string>> = {};
+    for (const part of COLOR_PARTS) {
+      const c = this.getColor(part);
+      if (c) out[part] = c;
+    }
+    return out;
+  }
+  /** Back to the colours the model was authored with. */
+  resetColors() {
+    this.setColors(Object.fromEntries(this.baseColors));
+  }
+  private getColor(part: ColorPart): string | null {
+    const mat = this.parts.materials.get(COLOR_MATERIAL[part]) as THREE.MeshStandardMaterial | undefined;
+    if (!mat) return null;
+    return "#" + (part === "light" || part === "eyes" ? mat.emissive : mat.color).getHexString();
+  }
+
+  /** Put a logo on the chest (an image URL, an <img>/<canvas>, or a texture); `null` removes it.
+   *  The logo follows the chest bone, so it moves with every animation. */
+  async setLogo(source: string | HTMLImageElement | HTMLCanvasElement | THREE.Texture | null, o: { size?: number; placement?: LogoPlacement } = {}) {
+    this.removeLogo();
+    if (!source) return;
+    let tex: THREE.Texture;
+    if (typeof source === "string") tex = await new THREE.TextureLoader().loadAsync(source);
+    else if ((source as THREE.Texture).isTexture) tex = source as THREE.Texture;
+    else tex = new THREE.CanvasTexture(source as HTMLCanvasElement);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    this.removeLogo(); // a newer call may have finished first
+    const placement = o.placement ?? (this.parts.materials.has("Mat_Uniform") ? "left" : "center");
+    const anchor = this.logoAnchor(placement);
+    if (!anchor) return;
+    const img = tex.image as { width?: number; height?: number } | undefined;
+    const aspect = img?.width && img?.height ? img.width / img.height : 1;
+    const size = o.size ?? (placement === "left" ? 0.075 : 0.1);
+    const w = aspect >= 1 ? size : size * aspect;
+    const h = aspect >= 1 ? size / aspect : size;
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.22, envMapIntensity: 0.25,
+      transparent: true, alphaTest: 0.04, roughness: 0.75, metalness: 0,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+    });
+    mat.name = "Mat_Logo";
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    mesh.name = "Logo";
+    // place in rest pose (model space), then re-parent under the chest bone keeping the world transform
+    const chest = this.joints.bone("chest");
+    this.restBones();
+    this.root.updateMatrixWorld(true);
+    mesh.position.copy(anchor.pos).addScaledVector(anchor.normal, 0.0025);
+    mesh.lookAt(anchor.pos.clone().addScaledVector(anchor.normal, 1));
+    this.model.add(mesh);
+    mesh.updateMatrixWorld(true);
+    chest.attach(mesh);
+    this.logo = mesh;
+    this.update(0);
+    this.emit("appearance", { logo: true });
+  }
+  removeLogo() {
+    if (!this.logo) return;
+    this.logo.removeFromParent();
+    this.logo.geometry.dispose();
+    const m = this.logo.material as THREE.MeshStandardMaterial;
+    m.map?.dispose();
+    m.dispose();
+    this.logo = null;
+  }
+  get hasLogo() {
+    return !!this.logo;
+  }
+  private restBones() {
+    for (const name of this.joints.names) {
+      const b = this.joints.bone(name);
+      b.position.copy(this.joints.restLocalPos(name));
+      b.quaternion.copy(this.joints.restLocalQuat(name));
+    }
+  }
+  /** Front surface point of the chest (model space) found by ray-casting the body meshes in the rest pose. */
+  private logoAnchor(placement: LogoPlacement) {
+    if (this.logoAnchors[placement]) return this.logoAnchors[placement];
+    this.restBones();
+    this.root.updateMatrixWorld(true);
+    const inv = this.root.matrixWorld.clone().invert();
+    const chest = this.joints.restWorldPos("chest");
+    const neck = this.joints.restWorldPos("neck");
+    const y = placement === "center" && this.parts.logoHeight != null ? this.parts.logoHeight : chest.y + (neck.y - chest.y) * (placement === "left" ? 0.62 : 0.55);
+    const x = placement === "left" ? Math.abs(this.joints.restWorldPos("eye_L").x) * 1.35 + 0.03 : 0;
+    const body = this.parts.skinned.filter((m) => /^Body_/.test(m.name));
+    const ray = new THREE.Raycaster(new THREE.Vector3(x, y, chest.z + 1).applyMatrix4(this.root.matrixWorld), new THREE.Vector3(0, 0, -1).transformDirection(this.root.matrixWorld));
+    const hit = ray.intersectObjects(body, false).find((h) => h.distance < 1.0);
+    if (!hit) return null;
+    const pos = hit.point.clone().applyMatrix4(inv);
+    const normal = (hit.face?.normal.clone() ?? new THREE.Vector3(0, 0, 1)).transformDirection(hit.object.matrixWorld).transformDirection(inv);
+    if (normal.z < 0) normal.negate();
+    normal.lerp(new THREE.Vector3(0, 0, 1), 0.5).normalize(); // keep the badge upright-ish on curved shells
+    return (this.logoAnchors[placement] = { pos, normal });
+  }
+
   // ================================================================ gaze
   /** Look at a world-space point, an Object3D, or `null` to release. */
   lookAt(target: Vec3 | THREE.Object3D | null) {
@@ -567,12 +706,37 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
 
   // ================================================================ locomotion
+  /** Walls and furniture the robot must not pass through (null = open floor). The viewer sets this for its environment. */
+  get world(): World | null {
+    return this.locomotion.world;
+  }
+  set world(w: World | null) {
+    this.locomotion.world = w;
+    if (w) {
+      const p = this.root.position;
+      const r = resolveWorld(w, p.x, p.z, this.locomotion.radius);
+      if (r.hit) {
+        p.x = r.x;
+        p.z = r.z;
+        this.locomotion.plantFeetNeutral();
+      }
+    }
+  }
+  /** What the last walkTo did about obstacles: planned route, whether the target was moved, whether it was unreachable. */
+  get lastWalk(): WalkReport {
+    return this.locomotion.lastWalk;
+  }
   walkTo(target: { x: number; z: number }, o: WalkOptions = {}): Promise<boolean> {
     this.emit("walk:start", { x: target.x, z: target.z });
     const p = this.locomotion.walkTo(target.x, target.z, o);
-    return p.then((ok) => {
-      return ok;
-    });
+    const lw = this.locomotion.lastWalk;
+    if (lw.unreachable) this.emit("walk:blocked", { reason: "unreachable", x: target.x, z: target.z });
+    else if (lw.adjusted) this.emit("walk:blocked", { reason: "adjusted", x: target.x, z: target.z });
+    if (!lw.unreachable) {
+      const s = this.root.position;
+      this.emit("walk:route", { points: [{ x: s.x, z: s.z }, ...(lw.route.length ? lw.route : [{ x: target.x, z: target.z }])] });
+    }
+    return p;
   }
   turnTo(yawDegrees: number): Promise<boolean> {
     return this.locomotion.turnTo(yawDegrees);
@@ -589,6 +753,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     const prevEmotion = this.face.emotion;
     if (o.emotion) this.setEmotion(o.emotion);
     const gestures = o.gestures !== false;
+    this.performer.speechGestures = gestures;
     if (gestures) {
       this.animation.play("talkR");
       this.animation.play("talkL");
@@ -715,6 +880,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
     const prev = this.face.emotion;
     if (o.emotion) this.setEmotion(o.emotion);
     const gestures = o.gestures !== false;
+    this.performer.speechGestures = gestures;
     if (gestures) {
       this.animation.play("talkR");
       this.animation.play("talkL");
@@ -753,6 +919,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
         stream.end();
       },
       stop: () => this.speech?.stop(),
+      time: () => stream.time(),
       finished,
     };
   }
@@ -825,6 +992,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
   }
 
   dispose() {
+    this.removeLogo(); // releases the logo texture (material.dispose() does not)
     this.stopSpeech();
     this.animation.dispose();
     this.audio?.dispose();
@@ -842,3 +1010,13 @@ export class RobotAvatar extends Emitter<RobotEvents> {
 }
 
 export { parseBone, clampEuler };
+
+/** Recolourable parts: body = main white shell, trim = secondary panels, joints = dark joints, accent = metal trims,
+ *  uniform = concierge vest, visor = face screen, light = LED rings/strips, eyes = face LEDs. */
+export type ColorPart = "body" | "trim" | "joints" | "accent" | "uniform" | "visor" | "light" | "eyes";
+export type LogoPlacement = "center" | "left";
+export const COLOR_PARTS: ColorPart[] = ["body", "trim", "joints", "accent", "uniform", "visor", "light", "eyes"];
+const COLOR_MATERIAL: Record<ColorPart, string> = {
+  body: "Mat_Shell", trim: "Mat_Shell2", joints: "Mat_Dark", accent: "Mat_Accent", uniform: "Mat_Uniform",
+  visor: "Mat_Visor", light: "Mat_Glow", eyes: "Mat_Face",
+};

@@ -15,6 +15,11 @@ export interface VisemeEvent {
   duration?: number;
   /** 0..1 articulation strength (1 = full) */
   weight?: number;
+  /** 0..1 lexical stress carried by this vowel (text-derived). Drives head nods, brow raises and hand beats. */
+  accent?: number;
+  /** punctuation that ends a phrase: on the pause event, or (`endMark`) on the last event before an aligned pause */
+  mark?: string;
+  endMark?: string;
 }
 
 export const visemeMorph = (v: Viseme) => `viseme_${v}`;

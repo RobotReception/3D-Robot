@@ -16,6 +16,8 @@ export interface RobotModelParts {
   materials: Map<string, THREE.Material>;
   /** emotion the character rests in (glTF extras `default_emotion` on the armature), e.g. "friendly" */
   defaultEmotion?: string;
+  /** height (m, model space) of the chest emblem where a center logo goes (glTF extras `logo_height`) */
+  logoHeight?: number;
 }
 
 async function configure(opts: LoadOptions) {
@@ -58,8 +60,10 @@ export function inspectRobotModel(gltf: GLTF): RobotModelParts {
     }
   });
   let defaultEmotion: string | undefined;
+  let logoHeight: number | undefined;
   gltf.scene.traverse((o) => {
     if (typeof o.userData?.default_emotion === "string") defaultEmotion = o.userData.default_emotion;
+    if (typeof o.userData?.logo_height === "number") logoHeight = o.userData.logo_height;
   });
   const missingBones = REQUIRED_BONES.filter((b) => !bones.has(b));
   const missingMorphs: string[] = [];
@@ -81,5 +85,5 @@ export function inspectRobotModel(gltf: GLTF): RobotModelParts {
     s.castShadow = true;
     s.receiveShadow = true;
   }
-  return { scene: gltf.scene, skinned, meshes, materials, defaultEmotion };
+  return { scene: gltf.scene, skinned, meshes, materials, defaultEmotion, logoHeight };
 }

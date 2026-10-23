@@ -73,35 +73,39 @@ const thinking: ClipDef = {
   }),
 };
 
+/**
+ * Speaking base pose: hands held in front at a relaxed height with only a very slow drift. The rhythmic motion (beats on
+ * stressed words, nods, brows) comes from the SpeechPerformer, timed to the speech, not from these loops.
+ */
 const talkR: ClipDef = {
-  name: "talkR", duration: 6.4, loop: true, priority: 3, fadeIn: 0.45, fadeOut: 0.45, channels: ["armR", "fingersR"],
-  description: "Light right-hand speech gesture.",
+  name: "talkR", duration: 12, loop: true, priority: 3, fadeIn: 1.1, fadeOut: 0.8, channels: ["armR", "fingersR"],
+  description: "Right hand held in a relaxed speaking pose (beats are added by the SpeechPerformer).",
   pose: (t) => ({
     joints: merge(
       armPose("R", {
-        shoulder: 22 + 7 * w(t, 3.2), abduction: 15 + 3 * w(t, 6.4), elbow: 68 + 14 * w(t, 3.2, 1.2),
-        twist: 12 * w(t, 6.4), wristFlex: 8 * w(t, 1.6),
+        shoulder: 17 + 1.6 * w(t, 12), abduction: 13 + 1.2 * w(t, 6, 1), elbow: 62 + 3 * w(t, 12, 1.2),
+        twist: 9 + 2.5 * w(t, 12, 0.5), wristFlex: 3 + 3 * w(t, 6),
       }),
-      fingerPose("R", { thumb: 0.1, index: 0.1, middle: 0.2, ring: 0.25 }),
+      fingerPose("R", { thumb: 0.12, index: 0.12, middle: 0.2, ring: 0.26 }),
     ),
   }),
 };
 const talkL: ClipDef = {
-  name: "talkL", duration: 6, loop: true, priority: 3, fadeIn: 0.45, fadeOut: 0.45, channels: ["armL", "fingersL"],
-  description: "Light left-hand speech gesture.",
+  name: "talkL", duration: 12, loop: true, priority: 3, fadeIn: 1.1, fadeOut: 0.8, channels: ["armL", "fingersL"],
+  description: "Left hand held in a relaxed speaking pose (beats are added by the SpeechPerformer).",
   pose: (t) => ({
     joints: merge(
       armPose("L", {
-        shoulder: 14 + 5 * w(t, 3, 2), abduction: 13 + 2 * w(t, 6), elbow: 52 + 10 * w(t, 3, 0.4),
-        twist: -8 * w(t, 6, 1), wristFlex: 5 * w(t, 1.5, 1),
+        shoulder: 11 + 1.4 * w(t, 12, 2), abduction: 12 + 1 * w(t, 6), elbow: 48 + 3 * w(t, 12, 0.4),
+        twist: -6 + 2 * w(t, 12, 1), wristFlex: 2 + 2.5 * w(t, 4, 1),
       }),
-      fingerPose("L", { thumb: 0.15, index: 0.15, middle: 0.25, ring: 0.3 }),
+      fingerPose("L", { thumb: 0.16, index: 0.16, middle: 0.26, ring: 0.3 }),
     ),
   }),
 };
 
-const wave = (t: number, d: number, freq: number, amp: number, lift = 1): RawPose => {
-  const e = env(t, d, 0.55, 0.55);
+const wave = (t: number, d: number, freq: number, amp: number, lift = 1, ramp = 0.55): RawPose => {
+  const e = env(t, d, ramp, ramp);
   const swing = e * amp * w(t, 1 / freq);
   return merge(
     armPose("R", { shoulder: 10 * e, abduction: 78 * e * lift, twist: 78 * e, elbow: (96 + swing) * e }),
@@ -110,14 +114,14 @@ const wave = (t: number, d: number, freq: number, amp: number, lift = 1): RawPos
 };
 
 const greeting: ClipDef = {
-  name: "greeting", duration: 3, loop: false, priority: 6, fadeIn: 0.2, fadeOut: 0.4,
+  name: "greeting", duration: 3, loop: false, priority: 6, fadeIn: 0.38, fadeOut: 0.5,
   channels: ["armR", "fingersR", "head", "torso"],
   description: "Friendly raised-hand wave with a welcoming head tilt.",
   pose: (t) => {
-    const e = env(t, 3, 0.55, 0.55);
+    const e = env(t, 3, 0.85, 0.85); // unhurried raise and lower
     return {
       joints: merge(
-        wave(t, 3, 1.9, 24),
+        wave(t, 3, 1.9, 24, 1, 0.85),
         { spine: [2 * e, 0, 0], head: [...headPose({ pitch: 5 * e, roll: 6 * e })] as [number, number, number] },
       ),
       pelvis: [0, -0.008 * e, 0],
@@ -126,7 +130,7 @@ const greeting: ClipDef = {
 };
 
 const goodbye: ClipDef = {
-  name: "goodbye", duration: 3.6, loop: false, priority: 6, fadeIn: 0.2, fadeOut: 0.5,
+  name: "goodbye", duration: 3.6, loop: false, priority: 6, fadeIn: 0.38, fadeOut: 0.6,
   channels: ["armR", "fingersR", "head", "torso"],
   description: "Slow farewell wave finishing with a small bow.",
   pose: (t) => {
@@ -158,7 +162,7 @@ const pointing: ClipDef = {
 };
 
 const happy: ClipDef = {
-  name: "happy", duration: 2.2, loop: false, priority: 6, fadeIn: 0.2, fadeOut: 0.45,
+  name: "happy", duration: 2.2, loop: false, priority: 6, fadeIn: 0.38, fadeOut: 0.55,
   description: "Cheerful bounce with arms raised.",
   pose: (t) => {
     const e = env(t, 2.2, 0.4, 0.5);

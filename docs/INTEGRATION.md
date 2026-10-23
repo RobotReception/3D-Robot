@@ -31,6 +31,8 @@ onAssistantReply(async ({ text, audioUrl, visemes, emotion }) => {
 onToolError(() => robot.setState("error"));
 robot.stateMachine.userTarget = camera;      // eyes on the user
 ```
+**Ready-made version for Gemini (question → thinking → streamed answer with sync'd mouth, nods, hand beats and emotion tags): [GEMINI.md](GEMINI.md).** The same `RobotAssistant` works with any LLM/TTS through two tiny interfaces.
+
 Remote backends can instead send JSON commands over WebSocket ([COMMANDS.md](COMMANDS.md)); an LLM can emit them directly as tool calls.
 
 ## 4. Replacing the character

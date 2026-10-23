@@ -28,12 +28,17 @@ interface Entry {
   priority: number;
   loop: boolean;
   fadeIn: number;
+  /** fade used when this entry becomes the owner again after a higher-priority clip ended (not the one-off play() override) */
+  resumeFade: number;
   fadeOut: number;
   action: THREE.AnimationAction;
   weight: number;
   ending: boolean;
   duration: number;
+  eased: number;
 }
+
+const easeW = (x: number) => x * x * x * (x * (x * 6 - 15) + 10); // smootherstep: also zero acceleration at both ends
 
 type Listener = (type: "play" | "end" | "blocked", info: { name: string; channel?: Channel; channels?: Channel[] }) => void;
 
@@ -136,8 +141,9 @@ export class AnimationController {
       stack.push({
         id: this.nextId++, name, channel, priority, loop,
         fadeIn: Math.max(0.01, o.fadeIn ?? def.fadeIn ?? 0.35),
+        resumeFade: Math.max(0.01, def.fadeIn ?? 0.35),
         fadeOut: Math.max(0.01, o.fadeOut ?? def.fadeOut ?? 0.35),
-        action, weight: 0, ending: false, duration: def.duration,
+        action, weight: 0, eased: 0, ending: false, duration: def.duration,
       });
       accepted.push(channel);
     }
@@ -191,6 +197,10 @@ export class AnimationController {
     for (const [channel, stack] of this.stacks) {
       const top = this.topOf(stack);
       let sum = 0;
+      // a hand-over takes as long as its slowest side: the incoming clip and whatever it replaces fade over the SAME time
+      // (otherwise the faster fade decides the pace and a 1 s gesture entry becomes a 0.5 s jerk)
+      let xfade = top ? top.fadeIn : 0.35;
+      for (const e of stack) if (e !== top && e.weight > 1e-3) xfade = Math.max(xfade, e.ending ? e.fadeOut : xfade);
       for (const e of stack) {
         // one-shot finished?
         if (!e.loop && !e.ending && e.action.time >= e.duration - 1e-3) {
@@ -198,12 +208,16 @@ export class AnimationController {
           this.onEvent?.("end", { name: e.name, channel });
         }
         const target = !e.ending && e === top ? 1 : 0;
-        const rate = target === 1 ? 1 / e.fadeIn : 1 / e.fadeOut;
+        if (e.weight >= 0.999 && e.fadeIn !== e.resumeFade) e.fadeIn = e.resumeFade; // an instant first appearance must not make every later resume a snap
+        const rate = 1 / (stack.length > 1 ? xfade : target === 1 ? e.fadeIn : e.fadeOut);
         e.weight += Math.sign(target - e.weight) * Math.min(Math.abs(target - e.weight), rate * dt);
         sum += e.weight;
       }
+      // ease the raw linear fade (smoothstep): blends start and end with zero velocity instead of a constant-speed ramp
+      sum = 0;
+      for (const e of stack) sum += (e.eased = easeW(e.weight));
       for (const e of stack) {
-        const w = sum > 1e-5 ? e.weight / sum : 0;
+        const w = sum > 1e-5 ? e.eased / sum : 0;
         e.action.setEffectiveWeight(w);
         e.action.paused = false;
       }

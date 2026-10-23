@@ -97,3 +97,48 @@ s.pushPCM16(chunk); s.pushVisemes(events?); s.end();
 - IK covers legs and arms only; no full-body IK, no collision avoidance between arm and torso.
 - `moveArm` abduction is limited to 88° (the Euler decomposition); raise the arm further with `shoulder` (flexion up to 190°).
 - Browser `speechSynthesis` provides no audio data (see LIPSYNC.md).
+
+## Appearance: brand colours and chest logo
+
+```ts
+robot.setColors({ body: "#f5f7fa", uniform: "#0080c6", accent: "#f78a2c", eyes: "#7fd3ff" });
+robot.getColors();     // { body: "#f5f7fa", trim: "...", joints: "...", ... } — only the parts this model has
+robot.resetColors();   // back to the authored colours
+await robot.setLogo("/logos/alrazi.png", { size: 0.1, placement: "center" }); // or "left"; image URL, <img>, <canvas> or texture
+await robot.setLogo(null);  // remove
+```
+
+Parts: `body` (main shell), `trim` (secondary panels), `joints`, `accent` (metal trims / medallion), `uniform` (concierge vest),
+`visor` (face screen), `light` (LED rings and strips), `eyes` (face LEDs). The logo is placed on the chest surface in the
+rest pose and parented to the `chest` bone, so it follows every animation. The Control Studio exposes all of this in the
+**Brand** tab (presets incl. Al-Razi University, colour pickers, logo upload, size and placement).
+
+## Obstacles: walls and furniture
+
+The robot never walks through walls or furniture when it has a `world`:
+
+```ts
+robot.world = { bounds: { minX: -4, maxX: 4, minZ: -4, maxZ: 4 },      // walls (the robot centre stays inside)
+                boxes:   [{ minX: -1, maxX: 1, minZ: -0.3, maxZ: 0.3 }], // desks, benches (axis-aligned, metres)
+                circles: [{ x: 2.5, z: 2, r: 0.4 }] };                  // plants, pillars
+await robot.walkTo({ x: 0, z: 3 });   // plans a route AROUND obstacles (grid A* + smoothing), keeps body clearance
+robot.lastWalk;                       // { route, adjusted, unreachable }
+robot.on("walk:blocked", (e) => ...); // "adjusted": the target was inside furniture and moved to the nearest free spot;
+                                      // "unreachable": no route (walkTo resolves false and nothing starts)
+robot.on("walk:route", (e) => ...);   // planned points, for drawing
+```
+
+`RobotViewer` sets the world automatically (the lobby's walls, desk, plants and bench; a bounded floor for the studio
+backdrops). `walkForward()` brakes in front of an obstacle; all other motion slides along surfaces and cannot tunnel.
+The collision radius comes from the body width (≈0.31 m concierge, ≈0.25 m mascot) — `robot.locomotion.radius`.
+`resolveCollision`, `findPath`, `nearestFree` are exported for your own tools.
+
+## Motion quality notes
+
+- Clip fades use smootherstep weights, so gestures start and end with zero velocity and acceleration; resuming the idle
+  base after a gesture is a normal fade (not a snap).
+- Walking: the gait phase is continuous (arm swing, pelvis sway and bob are smooth functions of it), body speed is
+  limited by how stretched the legs are (no sagging at the start), foot landing is predicted from the speed the body
+  will have, and feet follow minimum-jerk swings.
+- `tests/motion.test.ts`-style metrics: per-joint angular acceleration of speech/greeting/thinking dropped from
+  hundreds–thousands rad/s² to tens; the walk arm-swing pop (42° per step) is gone.

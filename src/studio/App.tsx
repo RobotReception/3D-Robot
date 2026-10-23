@@ -3,14 +3,15 @@ import type { BackgroundPreset, CameraPreset, QualityLevel } from "../viewer/Rob
 import { StudioCore, type Style } from "./core";
 import { makeT, type Lang } from "./i18n";
 import { AudioPanel } from "./panels/AudioPanel";
+import { BrandPanel } from "./panels/BrandPanel";
 import { DevPanel } from "./panels/DevPanel";
 import { JointsPanel } from "./panels/JointsPanel";
 import { MotionPanel } from "./panels/MotionPanel";
 import { StudioCtx, useCoreChange, useLocal, useStudio } from "./StudioContext";
 import { Chip } from "./ui";
 
-type Tab = "Motion" | "Joints" | "Audio" | "Developer";
-const TABS: Tab[] = ["Motion", "Joints", "Audio", "Developer"];
+type Tab = "Motion" | "Brand" | "Joints" | "Audio" | "Developer";
+const TABS: Tab[] = ["Motion", "Brand", "Joints", "Audio", "Developer"];
 
 export function App() {
   const host = useRef<HTMLDivElement>(null);
@@ -52,6 +53,7 @@ export function App() {
           </nav>
           <div className="panel">
             {ready && tab === "Motion" && <MotionPanel />}
+            {ready && tab === "Brand" && <BrandPanel />}
             {ready && tab === "Joints" && <JointsPanel />}
             {ready && tab === "Audio" && <AudioPanel />}
             {ready && tab === "Developer" && <DevPanel />}
@@ -92,7 +94,7 @@ function Toolbar({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) 
         </label>
         <label>{t("Background")}
           <select value={core.viewer.background} onChange={(e) => core.setBackground(e.target.value as BackgroundPreset)} data-testid="bg-select">
-            {(["studio", "light", "dusk", "green", "transparent"] as const).map((b) => <option key={b}>{b}</option>)}
+            {(["lobby", "studio", "light", "dusk", "green", "transparent"] as const).map((b) => <option key={b}>{b}</option>)}
           </select>
         </label>
       </div>

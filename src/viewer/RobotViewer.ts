@@ -7,10 +7,13 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import type { RobotAvatar } from "../engine/RobotAvatar";
+import type { World } from "../engine/world";
+import { buildLobby, type Lobby, type LobbyBrand } from "./environments/lobby";
+export type { LobbyBrand };
 
 export type QualityLevel = "low" | "medium" | "high";
 export type CameraPreset = "full" | "upper" | "face" | "side" | "back";
-export type BackgroundPreset = "studio" | "light" | "dusk" | "green" | "transparent";
+export type BackgroundPreset = "lobby" | "studio" | "light" | "dusk" | "green" | "transparent";
 
 export class WebGLUnavailableError extends Error {
   constructor(msg = "WebGL is not available on this device/browser") {
@@ -33,6 +36,7 @@ const QUALITY: Record<QualityLevel, { pixelRatio: number; shadows: boolean; shad
   high: { pixelRatio: 2, shadows: true, shadowMap: 2048, envIntensity: 1, toneMapping: THREE.ACESFilmicToneMapping, bloom: true },
 };
 const BACKGROUNDS: Record<BackgroundPreset, { color: string | null; floor: string }> = {
+  lobby: { color: null, floor: "#1b2030" }, // a real room (see environments/lobby.ts)
   studio: { color: "#10131a", floor: "#1b2030" },
   light: { color: "#dfe5ee", floor: "#cfd6e2" },
   dusk: { color: "#2b2147", floor: "#3a2c5c" },
@@ -76,6 +80,11 @@ export class RobotViewer {
   private ring: THREE.Mesh;
   private grid: THREE.GridHelper;
   private envTex: THREE.Texture;
+  private lobby: Lobby | null = null;
+  private lobbyBrand: LobbyBrand | null = null;
+  /** what the robots may walk on: the lobby's walls and furniture, or the studio floor (null = unbounded) */
+  world: World | null = null;
+  private lobbyEnv: THREE.Texture | null = null;
   private bloomComposer: EffectComposer | null = null;
   private finalComposer: EffectComposer | null = null;
   private bloomPass: UnrealBloomPass | null = null;
@@ -183,6 +192,7 @@ export class RobotViewer {
   // ---- avatars
   add(avatar: RobotAvatar) {
     this.avatars.add(avatar);
+    avatar.world = this.world;
     this.scene.add(avatar.root);
     avatar.root.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -219,7 +229,7 @@ export class RobotViewer {
     this.renderer.toneMapping = c.toneMapping;
     this.renderer.toneMappingExposure = this.light.exposure;
     this.scene.environmentIntensity = c.envIntensity;
-    this.grid.visible = q !== "low" && this.light.grid;
+    this.grid.visible = q !== "low" && this.light.grid && this.background !== "lobby";
     this.setBloom(c.bloom);
     this.floor.receiveShadow = c.shadows;
     // materials need recompiling when shadows toggle
@@ -259,7 +269,7 @@ export class RobotViewer {
       this.bloomComposer = new EffectComposer(this.renderer, mk());
       this.bloomComposer.renderToScreen = false;
       this.bloomComposer.addPass(new RenderPass(this.scene, this.camera));
-      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.38, 0.3, 0);
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.16, 0.25, 0);
       this.bloomComposer.addPass(this.bloomPass);
       const mix = new ShaderPass(
         new THREE.ShaderMaterial({
@@ -309,10 +319,43 @@ export class RobotViewer {
   setBackground(b: BackgroundPreset) {
     this.background = b;
     const p = BACKGROUNDS[b];
+    const room = b === "lobby";
+    if (room) this.enterLobby();
+    else if (this.lobby) {
+      this.lobby.group.removeFromParent();
+      this.scene.environment = this.envTex;
+      this.controls.maxDistance = 9;
+    }
+    this.setWorld(room ? this.lobby!.world : { bounds: { minX: -5.2, maxX: 5.2, minZ: -5.2, maxZ: 5.2 }, boxes: [], circles: [] });
+    this.floor.visible = !room;
+    this.grid.visible = !room && this.quality !== "low" && this.light.grid;
+    this.ring.visible = !room && this.light.grid;
     this.scene.background = p.color ? new THREE.Color(p.color) : null;
     this.scene.fog = p.color ? new THREE.Fog(p.color, 7, 15) : null;
     (this.floor.material as THREE.MeshStandardMaterial).color.set(p.floor);
-    this.renderer.setClearColor(0x000000, p.color ? 1 : 0);
+    this.renderer.setClearColor(room ? 0xf1eee8 : 0x000000, p.color || room ? 1 : 0);
+  }
+  private setWorld(w: World | null) {
+    this.world = w;
+    for (const a of this.avatars) a.world = w;
+  }
+  /** brand the lobby (sign, desk logo plate, LED and trim colours); `null` = neutral reception sign */
+  async setLobbyBrand(brand: LobbyBrand | null) {
+    this.lobbyBrand = brand;
+    await this.lobby?.setBrand(brand);
+  }
+  /** build the lobby once, capture its reflections into the environment map, keep the camera inside the room */
+  private enterLobby() {
+    if (!this.lobby) {
+      this.lobby = buildLobby();
+      void this.lobby.setBrand(this.lobbyBrand);
+      const capture = new THREE.Scene();
+      capture.add(this.lobby.group);
+      this.lobbyEnv = this.pmrem.fromScene(capture, 0.02, 0.1, 40, { position: new THREE.Vector3(0, 1.3, 1.2) }).texture;
+    }
+    this.scene.add(this.lobby.group);
+    this.scene.environment = this.lobbyEnv;
+    this.controls.maxDistance = 6;
   }
   /** key light intensity and azimuth (degrees around the robot, 0 = from the front) */
   setKeyLight(intensity: number, angleDeg?: number) {
@@ -330,8 +373,9 @@ export class RobotViewer {
   }
   showGrid(on: boolean) {
     this.light.grid = on;
-    this.grid.visible = on;
-    this.ring.visible = on;
+    const room = this.background === "lobby";
+    this.grid.visible = on && !room;
+    this.ring.visible = on && !room;
   }
 
   // ---- camera
@@ -358,7 +402,7 @@ export class RobotViewer {
       upper: { pos: dir(0, 1.25, 1.8), tgt: dir(0, 1.0, 0) },
       face: { pos: dir(0, eyeY + 0.04, 0.95, Math.sqrt(kf)).setY(eyeY + 0.04), tgt: new THREE.Vector3(0, eyeY, 0).applyAxisAngle(yaw3, yaw) },
       side: { pos: dir(3.4, 1.0, 0.4), tgt: dir(0, 0.82, 0) },
-      back: { pos: dir(0, 1.05, -3.6), tgt: dir(0, 0.82, 0) },
+      back: { pos: dir(0, 1.05, this.background === "lobby" ? -2.7 : -3.6), tgt: dir(0, 0.82, 0) }, // in the lobby the desk is behind the robot
     };
     const { pos, tgt } = presets[p];
     pos.add(base);
@@ -469,6 +513,8 @@ export class RobotViewer {
     this.pmrem.dispose();
     this.floor.geometry.dispose();
     (this.floor.material as THREE.Material).dispose();
+    this.lobby?.dispose();
+    this.lobbyEnv?.dispose();
     this.ring.geometry.dispose();
     (this.ring.material as THREE.Material).dispose();
     this.grid.geometry.dispose();

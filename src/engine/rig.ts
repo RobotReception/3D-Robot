@@ -224,6 +224,9 @@ export class JointSpace {
   restWorldQuat(name: string) {
     return this.rest.get(name)!.restWorldQ;
   }
+  restLocalQuat(name: string) {
+    return this.rest.get(name)!.restLocalQ;
+  }
   restLocalPos(name: string) {
     return this.rest.get(name)!.restLocalPos;
   }
