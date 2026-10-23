@@ -22,6 +22,12 @@ a **Control Studio** to test everything.
 
 **Environment:** the Studio opens in a procedural reception **lobby** (polished stone floor, walnut slat feature wall with a backlit sign, reception desk, glass wall with daylight, plants, downlights). Reflections on the robot come from the room itself. Switch with *Background* (`lobby`, `studio`, `light`, ...) or `viewer.setBackground("lobby")`.
 
+## تشغيل سريع على جهازك (localhost)
+
+1. ثبّت [Node.js](https://nodejs.org) (الإصدار 20 أو أحدث) ونزّل المشروع (`git clone` ثم `git checkout claude/awesome-noether-ve29yd`، أو Download ZIP).
+2. **ويندوز:** انقر مرتين على `run-local.bat` — **ماك/لينكس:** `./run-local.sh`.
+3. سيفتح المتصفح على **http://localhost:5173** (أول مرة يثبّت الحزم تلقائيًا).
+
 ## Quick start
 
 ```bash
