@@ -85,6 +85,7 @@ Works with plain three.js ([examples/minimal.html](examples/minimal.html)) and R
 | Robot API, state machine, JSON bridge | `src/engine/{RobotAvatar,stateMachine,commands,bridge}.ts` | [docs/API.md](docs/API.md), [docs/COMMANDS.md](docs/COMMANDS.md) |
 | Viewer (quality tiers, camera) | `src/viewer/RobotViewer.ts` | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) |
 | Control Studio | `src/studio/` | [docs/STUDIO.md](docs/STUDIO.md) |
+| **Ask a question → the robot answers (Gemini)** | `src/engine/assistant.ts`, `examples/gemini/` | [docs/GEMINI.md](docs/GEMINI.md) |
 | Tests | `tests/` | [docs/TESTING.md](docs/TESTING.md) |
 | Integration guide | | [docs/INTEGRATION.md](docs/INTEGRATION.md) |
 

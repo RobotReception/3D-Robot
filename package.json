@@ -15,7 +15,9 @@
     "audio:build": "python3 tools/make_test_audio.py",
     "docs:gen": "tsx tools/gen_docs.ts",
     "ws:example": "node tools/ws_example_server.mjs",
-    "api:server": "node tools/remote_api_server.mjs"
+    "api:server": "node tools/remote_api_server.mjs",
+    "gemini:server": "tsx examples/gemini/server.ts",
+    "gemini:mock": "node tools/mock_gemini_server.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.2",

@@ -94,6 +94,8 @@ export interface StreamSpeechHandle {
   pushVisemes(events: VisemeEvent[]): void;
   end(): void;
   stop(): void;
+  /** seconds of the audio stream played so far (the clock the visemes and gesture cues run on) */
+  time(): number;
   finished: Promise<void>;
 }
 
@@ -917,6 +919,7 @@ export class RobotAvatar extends Emitter<RobotEvents> {
         stream.end();
       },
       stop: () => this.speech?.stop(),
+      time: () => stream.time(),
       finished,
     };
   }

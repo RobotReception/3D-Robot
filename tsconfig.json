@@ -13,5 +13,5 @@
     "isolatedModules": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "tests", "tools", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "tests", "tools", "examples/gemini", "vite.config.ts", "vitest.config.ts"]
 }

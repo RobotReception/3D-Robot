@@ -21,12 +21,26 @@ if (!process.env.SKIP_BUILD) {
   const b = spawnSync("npx", ["vite", "build"], { cwd: root, stdio: "inherit" });
   if (b.status !== 0) process.exit(1);
 }
-const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], { cwd: root, stdio: "ignore" });
-const kill = () => server.kill("SIGTERM");
+const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], { cwd: root, stdio: "ignore", env: { ...process.env, API_PROXY: "http://localhost:8790" } });
+// Gemini example: a mock Gemini API (same wire format), the real proxy in front of it (port 8790, proxied by vite preview at /api)
+// and a second proxy whose model answers "quota exceeded" (8791) for the error path
+const helpers = [
+  spawn("node", ["tools/mock_gemini_server.mjs", "8799"], { cwd: root, stdio: "ignore" }),
+  spawn(process.execPath, ["--import", "tsx", "examples/gemini/server.ts"], { cwd: root, stdio: "ignore", env: { ...process.env, PORT: "8790", GEMINI_API_KEY: "test-key", GEMINI_BASE_URL: "http://localhost:8799" } }),
+  spawn(process.execPath, ["--import", "tsx", "examples/gemini/server.ts"], { cwd: root, stdio: "ignore", env: { ...process.env, PORT: "8791", GEMINI_API_KEY: "test-key", GEMINI_BASE_URL: "http://localhost:8799", GEMINI_MODEL: "quota-model", ALLOWED_ORIGIN: `http://localhost:${PORT}` } }),
+];
+const kill = () => { server.kill("SIGTERM"); helpers.forEach((h) => h.kill("SIGTERM")); };
 process.on("exit", kill);
 for (let i = 0; i < 60; i++) {
   try { if ((await fetch(URL)).ok) break; } catch { /* not up yet */ }
   await new Promise((r) => setTimeout(r, 250));
+}
+
+for (const port of [8790, 8791]) {
+  for (let i = 0; i < 80; i++) {
+    try { if ((await fetch(`http://localhost:${port}/api/health`)).ok) break; } catch { /* not up yet */ }
+    await new Promise((r) => setTimeout(r, 250));
+  }
 }
 
 const results = [];
@@ -594,6 +608,107 @@ for (const [name, url] of [["minimal embed (plain three.js)", "examples/minimal.
     ok(y > 0.9, "hand not raised " + y);
     return { handY: +y.toFixed(2), brightPixels: +lit.toFixed(3) };
   });
+}
+
+console.log("\nGemini assistant (examples/gemini.html -> proxy -> mock Gemini API)");
+{
+  const g = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const gp = await g.newPage();
+  gp.on("console", (m) => { if (m.type() === "error" && !/status of (4|5)\d\d|Failed to load resource/.test(m.text())) consoleErrors.push(m.text()); });
+  gp.on("pageerror", (e) => consoleErrors.push("pageerror: " + e.message));
+  await gp.goto(`http://localhost:${PORT}/examples/gemini.html?quality=low`);
+  await gp.waitForFunction(() => window.assistant && window.robot, null, { timeout: 90000 });
+  await gp.evaluate(() => {
+    window.__ev = [];
+    const a = window.assistant;
+    for (const k of ["state", "sentence", "tag", "answer", "error"]) a.on(k, (e) => window.__ev.push([k, e]));
+    window.__perf = 0;
+    window.robot.on("speech:start", () => { window.__speakStart = true; });
+    setInterval(() => { window.__perf = Math.max(window.__perf, window.robot.performer.amount); }, 50);
+  });
+
+  await check("ask in Arabic: thinking -> speaking -> idle, text spoken sentence by sentence, tags never spoken, history clean", async () => {
+    await gp.fill("#q", "ما هي شروط القبول في الجامعة؟");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.assistant.history.length === 2, null, { timeout: 90000, polling: 100 });
+    const r = await gp.evaluate(() => ({ ev: window.__ev.map(([k, e]) => (k === "state" ? "state:" + e.state : k === "tag" ? "tag:" + e.tag.name + "=" + e.tag.value : k === "sentence" ? "sentence" : k)), hist: window.assistant.history, shown: document.querySelector(".msg.bot")?.textContent, robot: window.robot.stateMachine.state, perf: window.__perf }));
+    const seq = r.ev.filter((e) => e.startsWith("state:")).map((e) => e.slice(6));
+    ok(seq[0] === "thinking" && seq.includes("speaking") && seq.at(-1) === "idle", "state sequence " + JSON.stringify(seq));
+    ok(r.ev.filter((e) => e === "sentence").length >= 2, "expected several spoken sentences: " + JSON.stringify(r.ev));
+    ok(r.ev.includes("tag:gesture=greeting") && r.ev.includes("tag:emotion=curious"), "tags not executed: " + JSON.stringify(r.ev));
+    ok(!/\[|\]|emotion|gesture/.test(r.hist[1].text) && !/\[|\]/.test(r.shown), "tags leaked into text: " + r.hist[1].text);
+    ok(/جامعة الرازي/.test(r.shown), "answer not shown: " + r.shown);
+    ok(r.robot === "idle", "robot not idle at the end: " + r.robot);
+    ok(r.perf > 0.5, "speech performer never engaged: " + r.perf);
+    await gp.screenshot({ path: path.join(shotDir, "gemini-example.png") });
+    return { states: seq, perf: +r.perf.toFixed(2) };
+  });
+
+  await check("English question works too and keeps the conversation history", async () => {
+    await gp.evaluate(() => { window.__ev.length = 0; });
+    await gp.fill("#q", "Tell me about the programs");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.assistant.history.length === 4, null, { timeout: 90000, polling: 100 });
+    const h = await gp.evaluate(() => window.assistant.history.map((m) => m.role));
+    ok(JSON.stringify(h) === JSON.stringify(["user", "assistant", "user", "assistant"]), JSON.stringify(h));
+    return h;
+  });
+
+  await check("barge-in: a new question interrupts the running answer; stop returns the robot to idle", async () => {
+    await gp.evaluate(() => { window.__ev.length = 0; });
+    await gp.fill("#q", "give me a long slow answer");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.__ev.some(([k, e]) => k === "state" && e.state === "speaking"), null, { timeout: 60000, polling: 50 });
+    await gp.fill("#q", "ما هي شروط القبول؟");
+    await gp.click("#send"); // interrupt
+    await gp.waitForFunction(() => window.__ev.filter(([k]) => k === "answer").length >= 2, null, { timeout: 90000, polling: 100 });
+    const answers = await gp.evaluate(() => window.__ev.filter(([k]) => k === "answer").map(([, e]) => e.aborted));
+    ok(answers[0] === true && answers[1] === false, "first answer should be aborted, second complete: " + JSON.stringify(answers));
+    await gp.fill("#q", "give me a long slow answer");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.assistant.thinking, null, { timeout: 20000 });
+    await gp.click("#stop");
+    await gp.waitForFunction(() => window.robot.stateMachine.state === "idle" && !window.assistant.thinking, null, { timeout: 20000, polling: 100 });
+    return answers;
+  });
+
+  await check("a failing server (quota exceeded) puts the robot in its error state with a readable message; the page stays usable", async () => {
+    await gp.evaluate(async () => {
+      const { ProxyChatBackend } = await import("/src/index.ts").catch(() => ({}));
+      window.__bad = ProxyChatBackend;
+    });
+    // swap the chat backend for one that talks to the quota-limited proxy (cross-origin, allowed by ALLOWED_ORIGIN)
+    const res = await gp.evaluate(async () => {
+      const a = window.assistant;
+      const good = a.options.chat;
+      a.options.chat = { async *stream(req, signal) {
+        const r = await fetch("http://localhost:8791/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages: req.messages }), signal });
+        if (!r.ok) throw new Error("HTTP " + r.status + ": " + (await r.json()).error);
+        yield "x";
+      } };
+      const out = await a.ask("hello");
+      const robotState = window.robot.stateMachine.state;
+      a.options.chat = good;
+      return { out, robotState, hist: a.history.length };
+    });
+    ok(/429/.test(res.out.error ?? "") && /quota/i.test(res.out.error ?? ""), "error not surfaced: " + JSON.stringify(res.out));
+    ok(res.robotState === "error", "robot should be in the error state: " + res.robotState);
+    await gp.waitForFunction(() => window.robot.stateMachine.state === "idle", null, { timeout: 90000, polling: 250 }); // error locks ~1.8 robot-seconds then recovers (the software renderer runs slowly)
+    return { error: res.out.error };
+  });
+
+  await check("the proxy protects the API key: wrong requests are rejected and the key never appears in any response", async () => {
+    const bad = await fetch(`http://localhost:${PORT}/api/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages: [{ role: "assistant", text: "x" }] }) });
+    ok(bad.status === 400, "invalid messages should be 400, got " + bad.status);
+    const get = await fetch(`http://localhost:${PORT}/api/chat`);
+    ok(get.status === 405, "GET should be 405, got " + get.status);
+    const health = await (await fetch(`http://localhost:${PORT}/api/health`)).text();
+    ok(!health.includes("test-key"), "key leaked in /api/health");
+    const html = await (await fetch(`http://localhost:${PORT}/examples/gemini.html`)).text();
+    ok(!html.includes("test-key"), "key leaked in the page");
+    return { health: JSON.parse(health) };
+  });
+  await g.close();
 }
 
 console.log("\nMobile layout (390x844, touch)");
