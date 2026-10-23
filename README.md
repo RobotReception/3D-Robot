@@ -5,6 +5,8 @@ Blender-built character (skeleton, shape keys, PBR) → GLB → a TypeScript eng
 (animation layers, IK locomotion, facial expressions, lip-sync, state machine, JSON/WebSocket control) →
 a **Control Studio** to test everything.
 
+> **دليل شامل بالعربية (ما تم، التشغيل، الربط، الحدود): [`docs/PROJECT_GUIDE.ar.md`](docs/PROJECT_GUIDE.ar.md)** · الربط بـ Gemini: [`docs/GEMINI.md`](docs/GEMINI.md)
+>
 > **بالعربية:** منصة لشخصية روبوت ثلاثية الأبعاد حقيقية (مجسم + هيكل عظمي + Shape Keys) تُبنى بـ Blender وتُشغَّل بمحرك TypeScript فوق three.js.
 > كل أمر في الـAPI (`playAnimation`, `setEmotion`, `moveHead`, `moveArm`, `walkTo`, `speak`…) يحرّك عظامًا أو Morph Targets حقيقية، وليس كاميرا أو صورة.
 > التقرير البحثي: [`docs/RESEARCH.ar.md`](docs/RESEARCH.ar.md) · التصميم: [`docs/DESIGN.md`](docs/DESIGN.md) · لوحة التحكم تدعم العربية (RTL).
@@ -33,8 +35,8 @@ a **Control Studio** to test everything.
 ```bash
 npm install
 npm run dev            # Control Studio at http://localhost:5173
-npm test               # 102 unit/integration tests (headless, real GLB models)
-npm run test:e2e       # 28 browser tests (Chromium + WebGL): Studio, audio lip-sync, WebSocket, R3F
+npm test               # 144 unit/integration tests (headless, real GLB models)
+npm run test:e2e       # 34 browser tests (Chromium + WebGL): Studio, audio lip-sync, WebSocket, R3F, Gemini assistant
 npm run build          # type-check + production build (dist/)
 ```
 
