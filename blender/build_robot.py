@@ -513,12 +513,6 @@ def humanoid_parts(P, S, L, bones, bone_index):
     sh.torus((0, -0.002, L["neck"] + 0.006), 0.052, 0.01, "chest", nu=32, nv=8)                          # collar band
     # shoulder yoke (navy) so the vest reads continuous to the shoulder caps
     un.ellipsoid((0, 0.004, L["neck"] - 0.05), (L["sh_x"] * 0.78, ty * 0.62, 0.04), "chest", e1=0.6, e2=0.8, nu=40, nv=14)
-    # medallion (no lanyard cords)
-    zm = ch_c + 0.005
-    ym = spherical_front_y(ch_c, ty, ch_c_r, E1, tp, zm)
-    md = (0, ym - 0.028, zm)
-    ac.torus(md, 0.027, 0.0068, "chest", axis=(0, -1, 0), nu=48, nv=10)
-    vi.ellipsoid(md, (0.022, 0.022, 0.006), "chest", e1=0.6, axis=(0, -1, 0), nu=32, nv=8)
     nt = tpt(FRONT + 0.62, 0.42, 1.0)
     s2.ellipsoid((nt[0], nt[1] - 0.004, nt[2]), (0.026, 0.004, 0.009), "chest", e1=0.4, e2=0.5,
                  nu=16, nv=8, axis=(0.25, -1, 0))                                                         # name tag

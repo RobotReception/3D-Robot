@@ -450,12 +450,20 @@ await check("quality levels change the real render settings (pixel ratio, shadow
   // selective bloom: on only at "high"; the stats then cover several passes
   const b = await page.evaluate(() => ({ bloom: window.viewer.bloom, layers: [...window.robot.parts.meshes.values()].filter((m) => m.layers.isEnabled(1)).map((m) => m.name) }));
   ok(b.bloom === true && b.layers.includes("Glow") && b.layers.includes("Mouth") && !b.layers.includes("Body_Shell"), "bloom not selective: " + JSON.stringify(b));
-  await page.waitForTimeout(1500);
-  const calls = await page.evaluate(() => window.viewer.stats.calls);
-  ok(calls > 20, "stats should count all passes: " + calls);
+  // stats refresh every ~0.5 s of frames and the software rasteriser is slow: wait for a snapshot taken after the switch
+  const fresh = async () => {
+    await page.evaluate(() => (window.__stats0 = window.viewer.stats));
+    await page.waitForFunction(() => window.viewer.stats !== window.__stats0, null, { timeout: 60000, polling: 100 });
+    await page.evaluate(() => (window.__stats0 = window.viewer.stats));
+    await page.waitForFunction(() => window.viewer.stats !== window.__stats0, null, { timeout: 60000, polling: 100 });
+    return page.evaluate(() => window.viewer.stats.calls);
+  };
+  const calls = await fresh();
   await page.selectOption('[data-testid="quality-select"]', "medium");
   const off = await page.evaluate(() => window.viewer.bloom);
   ok(off === false, "bloom should be off at medium");
+  const plain = await fresh();
+  ok(calls >= plain * 1.5, `stats should count all bloom passes: ${calls} calls with bloom vs ${plain} without`);
   q.bloom = b;
   return q;
 });
