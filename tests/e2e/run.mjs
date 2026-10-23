@@ -21,7 +21,8 @@ if (!process.env.SKIP_BUILD) {
   const b = spawnSync("npx", ["vite", "build"], { cwd: root, stdio: "inherit" });
   if (b.status !== 0) process.exit(1);
 }
-const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], { cwd: root, stdio: "ignore", env: { ...process.env, API_PROXY: "http://localhost:8790" } });
+// run vite directly (not through npx): killing an npx wrapper leaves the real server orphaned on the port with its old config
+const server = spawn(process.execPath, [path.join(root, "node_modules/vite/bin/vite.js"), "preview", "--port", String(PORT), "--strictPort"], { cwd: root, stdio: "ignore", env: { ...process.env, API_PROXY: "http://localhost:8790" } });
 // Gemini example: a mock Gemini API (same wire format), the real proxy in front of it (port 8790, proxied by vite preview at /api)
 // and a second proxy whose model answers "quota exceeded" (8791) for the error path
 const helpers = [
