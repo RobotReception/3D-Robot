@@ -27,6 +27,10 @@
       .user { align-self: flex-start; background: #1b2438; }
       .bot { align-self: flex-end; background: #0e2c42; border: 1px solid #14425f; }
       .bot.err { background: #45161c; border-color: #6d2430; color: #ffc0c6; }
+      .cmd { align-self: flex-end; max-width: 92%; padding: 6px 10px; border-radius: 12px; background: #17210f; border: 1px solid #2c4a1a; color: #c9f0a4; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+      .cmd .bad { color: #ffb36b; } .cmd .wait { color: var(--dim); }
+      #chips { display: flex; gap: 6px; padding: 8px 14px 0; overflow-x: auto; scrollbar-width: thin; }
+      #chips button { flex: none; padding: 4px 10px; font-size: 13px; border-radius: 99px; background: #131a28; }
       .hint { color: var(--dim); font-size: 13px; text-align: center; }
       form { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); }
       #q { flex: 1; min-width: 0; }
@@ -42,9 +46,10 @@
         <span id="status" data-s="idle">جاهز</span>
         <select id="lang" title="اللغة"><option value="ar">العربية</option><option value="en">English</option><option value="auto">تلقائي</option></select>
       </header>
-      <div id="log"><div class="hint">اكتب سؤالك أو اضغط 🎤 وتحدّث. الروبوت يفكّر ثم يجيب بصوته وحركته.</div></div>
+      <div id="log"><div class="hint">اكتب سؤالك أو اضغط 🎤 وتحدّث. الروبوت يفكّر ثم يجيب بصوته وحركته. ويمكنك أيضاً إعطاؤه أوامر مثل «تقدم للأمام» أو «اذهب إلى المكتب ثم لوّح» (اضغط ؟ للقائمة).</div></div>
+      <div id="chips" title="أوامر سريعة"></div>
       <form id="form">
-        <input id="q" autocomplete="off" placeholder="اسأل عن القبول، التخصصات، الموقع…" />
+        <input id="q" autocomplete="off" placeholder="اسأل، أو أصدر أمراً: تقدم مترين…" />
         <button type="button" id="mic" title="تحدّث">🎤</button>
         <button type="button" id="stop" title="إيقاف">⏹</button>
         <button class="primary" id="send">إرسال</button>

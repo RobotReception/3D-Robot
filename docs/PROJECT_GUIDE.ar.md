@@ -118,6 +118,8 @@ npm run dev                     # نافذة 2
 
 ما يفعله `RobotAssistant` عند كل سؤال: يفكّر فوراً ← يبثّ النص ويقطّعه جملاً ← صوت كل جملة (والتالية تُجهَّز أثناء نطق الحالية) ← تيار صوت واحد بلا فجوات ← مزامنة مع الصوت الحقيقي ← وسوم `[emotion=…]` و`[gesture=…]` تُنفَّذ في وقتها ولا تُنطق ← مقاطعة (barge-in) ← حالة خطأ مقروءة. لا يعرف Gemini تحديداً: أي نموذج وصوت عبر واجهتين صغيرتين.
 
+**أوامر من الشات:** اكتب «تقدم مترين» أو «اذهب إلى المكتب ثم لوّح» أو «استدر يميناً 45 درجة» أو «قف» فينفّذها الروبوت فوراً (بدون Gemini، يمشي حول الأثاث ولا يخترقه، ويخبرك بصوته إن عاقه عائق). وإن سألت Gemini «أرني الطريق إلى مكتب الاستقبال» فقد يحرّكه بوسم `[action=goto:desk]`. القائمة الكاملة والحدود: **[CHAT_COMMANDS.ar.md](CHAT_COMMANDS.ar.md)**.
+
 ---
 
 ## ٧) كيف تربطه بنظامك (اختر ما يناسبك)
@@ -213,7 +215,7 @@ blender/build_robot.py        بناء الأشكال الخمسة (مجسم، �
 public/models/*.glb           الموديلات الجاهزة    public/logos/   الشعارات
 src/engine/                   RobotAvatar (الواجهة الرئيسية) · الحركة: AnimationController, library, clips,
                               LocomotionController, ik, world · الوجه: FaceController, lipsync/ ·
-                              SpeechPerformer · assistant (+ assistantPrompt, backends/) · commands, bridge (JSON)
+                              SpeechPerformer · assistant (+ assistantPrompt, backends/) · chatCommands + actions (أوامر الشات) · commands, bridge (JSON)
 src/viewer/                   RobotViewer (مشهد، إضاءة، جودة) + environments/lobby.ts (البهو)
 src/studio/                   لوحة التحكم (React): Motion · Brand · Joints · Audio · Developer
 examples/                     minimal.html · r3f · gemini.html + gemini/ (الخادم الوسيط وصفحة الدردشة)
@@ -262,4 +264,4 @@ docs/                         وثائق تفصيلية (API, ANIMATION, LIPSYNC
 
 ## الوثائق التفصيلية
 
-[GEMINI.md](GEMINI.md) · [API.md](API.md) · [ANIMATION.md](ANIMATION.md) · [MOTIONS.md](MOTIONS.md) · [MOTION_AUTHORING.md](MOTION_AUTHORING.md) · [LIPSYNC.md](LIPSYNC.md) · [REMOTE_API.md](REMOTE_API.md) · [COMMANDS.md](COMMANDS.md) · [INTEGRATION.md](INTEGRATION.md) · [STUDIO.md](STUDIO.md) · [RIG.md](RIG.md) · [DESIGN.md](DESIGN.md) · [PERFORMANCE.md](PERFORMANCE.md) · [TESTING.md](TESTING.md)
+[CHAT_COMMANDS.ar.md](CHAT_COMMANDS.ar.md) · [GEMINI.md](GEMINI.md) · [API.md](API.md) · [ANIMATION.md](ANIMATION.md) · [MOTIONS.md](MOTIONS.md) · [MOTION_AUTHORING.md](MOTION_AUTHORING.md) · [LIPSYNC.md](LIPSYNC.md) · [REMOTE_API.md](REMOTE_API.md) · [COMMANDS.md](COMMANDS.md) · [INTEGRATION.md](INTEGRATION.md) · [STUDIO.md](STUDIO.md) · [RIG.md](RIG.md) · [DESIGN.md](DESIGN.md) · [PERFORMANCE.md](PERFORMANCE.md) · [TESTING.md](TESTING.md)

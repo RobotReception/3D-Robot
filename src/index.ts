@@ -1,7 +1,11 @@
 /** Robot Avatar Engine - public API */
 export { RobotAvatar } from "./engine/RobotAvatar";
 export { RobotAssistant, DirectiveParser, SentenceChunker, pcmEnvelope, listenOnce, speechRecognitionAvailable } from "./engine/assistant";
-export type { ChatBackend, ChatRequest, ChatMessage, TtsBackend, AssistantRobot, AssistantOptions, AskResult, Directive } from "./engine/assistant";
+export type { ChatBackend, ChatRequest, ChatMessage, TtsBackend, AssistantRobot, AssistantOptions, AskResult, Directive, CommandOptions, AssistantEvents } from "./engine/assistant";
+export { executeAction, executeActions, parseActionTag, LOBBY_PLACES, STEP_METERS } from "./engine/actions";
+export type { RobotAction, ActionResult, ActionContext, ActionRobot, Place, MoveDir, LookTarget, GestureName } from "./engine/actions";
+export { parseCommands, describeAction, commandHelp, ackWord, failureMessage } from "./engine/chatCommands";
+export type { ParsedCommand } from "./engine/chatCommands";
 export { ProxyChatBackend, ProxyTtsBackend } from "./engine/backends/proxy";
 export { buildSystemPrompt, ASSISTANT_EMOTIONS, ASSISTANT_GESTURES } from "./engine/assistantPrompt";
 export type { PromptOptions } from "./engine/assistantPrompt";

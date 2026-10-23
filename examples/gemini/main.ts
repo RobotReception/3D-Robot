@@ -1,6 +1,6 @@
 // Ask a question -> Gemini answers -> the robot thinks, speaks and reacts. See docs/GEMINI.md.
 import {
-  ProxyChatBackend, ProxyTtsBackend, RobotAssistant, RobotAvatar, RobotViewer, listenOnce, speechRecognitionAvailable,
+  ProxyChatBackend, ProxyTtsBackend, RobotAssistant, RobotAvatar, RobotViewer, commandHelp, describeAction, failureMessage, listenOnce, speechRecognitionAvailable,
 } from "../../src";
 import { BRAND_PRESETS, DEFAULT_BRAND } from "../../src/studio/brands";
 
@@ -39,11 +39,11 @@ const assistant = new RobotAssistant(robot, {
 
 // ---- UI
 const log = $("log"), q = $<HTMLInputElement>("q"), status = $("status"), lang = $<HTMLSelectElement>("lang");
-const STATUS: Record<string, string> = { idle: "جاهز", thinking: "يفكّر…", speaking: "يتحدّث", listening: "يستمع…", error: "حدث خطأ" };
+const STATUS: Record<string, string> = { idle: "جاهز", thinking: "يفكّر…", speaking: "يتحدّث", acting: "ينفّذ…", listening: "يستمع…", error: "حدث خطأ" };
 const setStatus = (s: string) => {
   status.dataset.s = s;
   status.textContent = STATUS[s] ?? s;
-  $("stop").style.display = s === "thinking" || s === "speaking" ? "inline-block" : "none";
+  $("stop").style.display = s === "thinking" || s === "speaking" || s === "acting" ? "inline-block" : "none";
 };
 const bubble = (cls: string, text = "") => {
   log.querySelector(".hint")?.remove();
@@ -60,8 +60,40 @@ assistant.on("sentence", (e) => { // the text appears sentence by sentence, as i
   if (current) current.textContent += (current.textContent ? " " : "") + e.text;
   log.scrollTop = log.scrollHeight;
 });
+// orders: one log box per typed order, its lines tick off as the robot finishes each step; LLM-driven moves get a line of their own
+let cmdBox: HTMLElement | null = null;
+assistant.on("command", (e) => {
+  if (current && !current.textContent) current.remove();
+  cmdBox = bubble("cmd");
+  e.actions.forEach((a, i) => {
+    const l = document.createElement("div");
+    l.className = "wait";
+    l.dataset.i = String(i);
+    l.textContent = `… ${describeAction(a, e.lang)}`;
+    cmdBox!.appendChild(l);
+  });
+  current = bubble("bot"); // the spoken "okay" / explanation shows up below the log
+});
+assistant.on("action", (e) => {
+  const lang = lang_() ;
+  const note = failureMessage(e.result, lang);
+  if (e.source === "chat" && cmdBox) {
+    const l = cmdBox.querySelector<HTMLElement>(`[data-i="${e.index}"]`);
+    if (l) {
+      l.className = e.result.ok ? "" : "bad";
+      l.textContent = `${e.result.ok ? "✓" : "✗"} ${describeAction(e.action, lang)}${e.result.moved !== undefined && e.action.type === "move" ? ` (${e.result.moved.toFixed(1)} م)` : ""}`;
+    }
+  } else if (e.source === "llm") {
+    const d = bubble("cmd");
+    const l = document.createElement("div");
+    l.className = e.result.ok ? "" : "bad";
+    l.textContent = `${e.result.ok ? "✓" : "✗"} ${describeAction(e.action, lang)}${note ? ` — ${note}` : ""}`;
+    d.appendChild(l);
+  }
+});
 assistant.on("error", (e) => bubble("bot err", `${e.stage === "tts" ? "الصوت" : "الإجابة"}: ${e.message}`));
 
+const lang_ = () => (lang.value === "en" ? "en" : "ar");
 async function ask(text: string) {
   if (!text.trim()) return;
   q.value = "";
@@ -70,12 +102,24 @@ async function ask(text: string) {
   const r = await assistant.ask(text);
   if (r.error || !r.text) current?.remove();
 }
+// quick orders (they work offline too: the robot understands them without Gemini)
+const CHIPS: [string, string][] = [["⬆ تقدم", "تقدم للأمام"], ["⬇ تراجع", "تراجع للخلف"], ["↶ يساراً", "استدر يسارا"], ["↷ يميناً", "استدر يمينا"], ["👋 لوّح", "لوّح"], ["🏢 المكتب", "اذهب إلى المكتب"], ["🏠 مكانك", "عد إلى مكانك"], ["✋ قف", "قف"], ["؟ الأوامر", ""]];
+for (const [label, cmd] of CHIPS) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = label;
+  b.addEventListener("click", () => {
+    if (cmd) void ask(cmd);
+    else bubble("bot hint", commandHelp(lang_()));
+  });
+  $("chips").appendChild(b);
+}
 $("form").addEventListener("submit", (e) => { e.preventDefault(); void ask(q.value); });
 $("stop").addEventListener("click", () => assistant.cancel());
 const mic = $("mic");
 if (!speechRecognitionAvailable()) mic.style.display = "none";
 mic.addEventListener("click", async () => {
-  assistant.cancel(); // talking over the robot interrupts it
+  assistant.cancel({ motion: false }); // talking over the robot interrupts its speech, not its walk
   setStatus("listening");
   try {
     const text = await listenOnce(robot, { lang: lang.value === "en" ? "en-US" : "ar-SA", onInterim: (t) => (q.value = t) });

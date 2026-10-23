@@ -1,4 +1,7 @@
+import type * as THREE from "three";
+import { executeAction, LOBBY_PLACES, parseActionTag, type ActionContext, type ActionResult, type ActionRobot, type Place, type RobotAction } from "./actions";
 import { ASSISTANT_EMOTIONS, ASSISTANT_GESTURES, buildSystemPrompt, type PromptOptions } from "./assistantPrompt";
+import { ackWord, describeAction, failureMessage, parseCommands, type ParsedCommand } from "./chatCommands";
 import { Emitter } from "./events";
 import type { EmotionName } from "./FaceController";
 import { activeIntervals, alignTextToActivity } from "./lipsync/align";
@@ -48,18 +51,19 @@ export interface AssistantRobot {
 }
 
 // ======================================================================= directives
-export type Directive = { name: "emotion"; value: EmotionName } | { name: "gesture"; value: string };
+export type Directive = { name: "emotion"; value: EmotionName } | { name: "gesture"; value: string } | { name: "action"; value: RobotAction };
 export type StreamPiece = { type: "text"; text: string } | { type: "tag"; tag: Directive };
 
-const TAG_RE = /^\[\s*(emotion|gesture)\s*[=:]\s*([A-Za-z_-]+)\s*\]$/i;
+const TAG_RE = /^\[\s*(emotion|gesture|action)\s*[=:]\s*([A-Za-z0-9_.:-]+)\s*\]$/i;
 const MAX_TAG = 40;
 
 /**
- * Splits an LLM text stream into plain text and `[emotion=x]` / `[gesture=x]` directives. A tag may arrive split
- * across chunks. Unknown names are dropped silently (never spoken); other square brackets stay text.
+ * Splits an LLM text stream into plain text and `[emotion=x]` / `[gesture=x]` / `[action=x]` directives. A tag may
+ * arrive split across chunks. Unknown names are dropped silently (never spoken); other square brackets stay text.
  */
 export class DirectiveParser {
   private buf = "";
+  constructor(private places: string[] = Object.keys(LOBBY_PLACES)) {}
   push(chunk: string): StreamPiece[] {
     this.buf += chunk;
     return this.drain(false);
@@ -94,9 +98,12 @@ export class DirectiveParser {
         text(raw);
         continue;
       }
-      const name = m[1].toLowerCase() as "emotion" | "gesture";
+      const name = m[1].toLowerCase() as "emotion" | "gesture" | "action";
       const value = m[2].toLowerCase();
-      if (name === "emotion" && (ASSISTANT_EMOTIONS as string[]).includes(value)) out.push({ type: "tag", tag: { name, value: value as EmotionName } });
+      if (name === "action") {
+        const a = parseActionTag(value, this.places);
+        if (a) out.push({ type: "tag", tag: { name, value: a } });
+      } else if (name === "emotion" && (ASSISTANT_EMOTIONS as string[]).includes(value)) out.push({ type: "tag", tag: { name, value: value as EmotionName } });
       else if (name === "gesture" && (ASSISTANT_GESTURES as readonly string[]).includes(value)) out.push({ type: "tag", tag: { name, value } });
       // unknown value: swallowed
     }
@@ -207,6 +214,18 @@ const until = (p: Promise<void>, signal: AbortSignal) =>
     p.then(resolve, reject);
   });
 
+/** mouth shapes for `text`, aligned to when the real audio is active (falls back to timing from the text alone) */
+function alignedVisemes(text: string, pcm: Int16Array, sr: number): VisemeEvent[] {
+  let ev: VisemeEvent[] = [];
+  try {
+    const env = pcmEnvelope(pcm, sr);
+    ev = alignTextToActivity(text, activeIntervals(env.data, env.hop, { threshold: 0.06 }));
+  } catch {
+    /* fall back below */
+  }
+  return ev.length ? ev : textToVisemeEvents(text, { totalDuration: Math.max(0.2, (pcm.length / sr) * 0.95) });
+}
+
 const toInt16 = (x: Int16Array | ArrayBuffer): Int16Array => (x instanceof Int16Array ? x : new Int16Array(x.byteLength & 1 ? x.slice(0, x.byteLength - 1) : x));
 
 // ======================================================================= the assistant
@@ -222,10 +241,29 @@ export interface AssistantOptions {
   /** parallel TTS requests (default 2): the next sentence is synthesised while the current one plays */
   prefetch?: number;
   language?: string;
+  /** orders typed in the chat ("تقدم مترين", "go to the desk") run at once without the LLM; `false` turns that off */
+  commands?: false | CommandOptions;
+}
+
+export interface CommandOptions {
+  /** named spots ("desk"...) the robot can walk to (default: the lobby of the built-in environment) */
+  places?: Record<string, Place>;
+  /** where "go back" goes (default: where the robot stood when the assistant was created) */
+  home?: Place;
+  /** longest single move in metres (default 6) */
+  maxMeters?: number;
+  /** what "look at me" looks at (default: the state machine's userTarget, i.e. the camera) */
+  userTarget?: () => THREE.Object3D | null;
+  /** say a short "okay" and report problems aloud (default true); false = silent, the result still has the text */
+  voice?: boolean;
 }
 
 export type AssistantEvents = {
-  state: { state: "idle" | "thinking" | "speaking" | "error" };
+  state: { state: "idle" | "thinking" | "speaking" | "acting" | "error" };
+  /** an order was recognised locally (before it runs) */
+  command: { text: string; actions: RobotAction[]; lang: "ar" | "en" };
+  /** one action finished (`source`: typed order or an [action=...] tag from the LLM) */
+  action: { action: RobotAction; result: ActionResult; index: number; source: "chat" | "llm" };
   /** a sentence starts being spoken (plain text, directives removed) */
   sentence: { text: string; index: number };
   tag: { tag: Directive; at: number };
@@ -237,6 +275,8 @@ export interface AskResult {
   text: string;
   aborted: boolean;
   error?: string;
+  /** set when the message was an order the robot carried out itself (no LLM call) */
+  commands?: ActionResult[];
 }
 
 interface Chunk {
@@ -266,9 +306,27 @@ export class RobotAssistant extends Emitter<AssistantEvents> {
   private busy = false;
   /** what the running answer has said so far (committed to the history if it gets interrupted) */
   private partial: (() => string) | null = null;
+  /** actions (typed orders or LLM tags) currently running */
+  private acting = 0;
+  private home: Place | null = null;
 
   constructor(private robot: AssistantRobot, readonly options: AssistantOptions) {
     super();
+    const r = robot as Partial<ActionRobot>;
+    if (r.root && typeof r.walkTo === "function") {
+      this.home = this.options.commands ? this.options.commands.home ?? null : null;
+      this.home ??= { x: r.root.position.x, z: r.root.position.z, facing: (r.root.rotation.y * 180) / Math.PI };
+    }
+  }
+
+  /** the robot as something that can act, plus where it may go; null when orders are off or the robot cannot walk (test fakes) */
+  private actor(): { robot: AssistantRobot & ActionRobot; ctx: ActionContext; o: CommandOptions } | null {
+    if (this.options.commands === false || !this.home) return null;
+    const robot = this.robot as AssistantRobot & ActionRobot;
+    if (typeof robot.walkTo !== "function") return null;
+    const o = this.options.commands ?? {};
+    const sm = (this.robot as { stateMachine?: { userTarget?: THREE.Object3D | null } }).stateMachine;
+    return { robot, o, ctx: { places: o.places ?? LOBBY_PLACES, home: this.home, maxMeters: o.maxMeters, userTarget: o.userTarget?.() ?? sm?.userTarget ?? null } };
   }
 
   get thinking() {
@@ -278,11 +336,12 @@ export class RobotAssistant extends Emitter<AssistantEvents> {
     return this.options.system ?? buildSystemPrompt(this.options.persona);
   }
 
-  /** stop talking / thinking now (the user interrupts); the robot returns to idle */
-  cancel() {
+  /** stop talking / thinking now (the user interrupts); the robot returns to idle. `motion: false` lets a walk in progress finish. */
+  cancel(o: { motion?: boolean } = {}) {
     const was = this.busy;
     this.commitPartial();
     this.abort();
+    if (this.acting > 0 && o.motion !== false) (this.robot as Partial<ActionRobot>).stop?.();
     if (was) {
       this.busy = false;
       this.robot.setState("idle");
@@ -304,9 +363,16 @@ export class RobotAssistant extends Emitter<AssistantEvents> {
     this.history.length = 0;
   }
 
-  async ask(question: string): Promise<AskResult> {
+  /**
+   * `opts.commands: false` sends the message to the LLM even if it reads like an order.
+   */
+  async ask(question: string, opts: { commands?: boolean } = {}): Promise<AskResult> {
     const q = question.trim();
     if (!q) return { text: "", aborted: false };
+    if (opts.commands !== false && this.actor()) {
+      const cmd = parseCommands(q);
+      if (cmd) return this.runCommand(q, cmd);
+    }
     if (this.busy) {
       // barge-in: interrupt the running answer (the new question sets "thinking" next)
       this.commitPartial();
@@ -326,7 +392,7 @@ export class RobotAssistant extends Emitter<AssistantEvents> {
     robot.setState("thinking");
     this.emit("state", { state: "thinking" });
 
-    const parser = new DirectiveParser();
+    const parser = new DirectiveParser(Object.keys(this.actor()?.ctx.places ?? LOBBY_PLACES));
     const chunker = new SentenceChunker();
     const chunks: Chunk[] = [];
     let pendingTags: Directive[] = [];
@@ -415,9 +481,27 @@ export class RobotAssistant extends Emitter<AssistantEvents> {
     const prevEmotion = robot.defaultEmotion;
     const timers: { at: number; fn: () => void }[] = [];
     let ticking = false;
+    // [action=...] tags from the model run one after another, starting when their sentence starts
+    let actions: Promise<void> = Promise.resolve();
+    let actionIndex = 0;
+    const runAction = (a: RobotAction) => {
+      const act = this.actor();
+      if (!act) return;
+      const index = actionIndex++;
+      this.acting++;
+      actions = actions
+        .then(async () => {
+          if (signal.aborted) return;
+          const result = await executeAction(act.robot, a, act.ctx, { settle: true });
+          this.emit("action", { action: a, result, index, source: "llm" });
+        })
+        .catch((e) => void fail("robot", e))
+        .finally(() => void this.acting--);
+    };
     const runTag = (tag: Directive) => {
       try {
         if (tag.name === "emotion") robot.setEmotion(tag.value);
+        else if (tag.name === "action") runAction(tag.value);
         else robot.playAnimation(tag.value);
       } catch {
         /* unknown clip on a custom rig: ignore */
@@ -476,14 +560,7 @@ export class RobotAssistant extends Emitter<AssistantEvents> {
         if (pcm) {
           stream.pushPCM16(pcm);
           const dur = pcm.length / sr;
-          let ev: VisemeEvent[] = [];
-          try {
-            const env = pcmEnvelope(pcm, sr);
-            ev = alignTextToActivity(c.text, activeIntervals(env.data, env.hop, { threshold: 0.06 }));
-          } catch {
-            /* fall back below */
-          }
-          if (!ev.length) ev = textToVisemeEvents(c.text, { totalDuration: Math.max(0.2, dur * 0.95) });
+          const ev = alignedVisemes(c.text, pcm, sr);
           stream.pushVisemes(ev.map((e) => ({ ...e, time: e.time + offset })));
           schedule(c.tags, offset, () => {
             said += (said ? " " : "") + c.text;
@@ -512,6 +589,10 @@ export class RobotAssistant extends Emitter<AssistantEvents> {
       } else {
         robot.setState("idle");
         result = { text: "", aborted: false };
+      }
+      if (!signal.aborted) {
+        for (const t of timers.splice(0)) t.fn(); // tags not polled yet (the audio has finished playing)
+        await until(actions, signal); // a walk the model asked for finishes before the answer is done
       }
     } catch (e) {
       if (signal.aborted) {
@@ -547,6 +628,107 @@ export class RobotAssistant extends Emitter<AssistantEvents> {
     }
     this.emit("answer", { text: result.text, aborted: result.aborted });
     return result;
+  }
+
+  // ------------------------------------------------------------------ orders typed in the chat
+  private async runCommand(q: string, cmd: ParsedCommand): Promise<AskResult> {
+    const act = this.actor()!;
+    if (this.busy) {
+      this.commitPartial();
+      this.abort();
+    }
+    const ctl = new AbortController();
+    this.ctl = ctl;
+    const { signal } = ctl;
+    this.busy = true;
+    this.partial = null;
+    this.history.push({ role: "user", text: q });
+    const { lang, actions } = cmd;
+    const voice = act.o.voice !== false;
+    this.emit("command", { text: q, actions, lang });
+    this.emit("state", { state: "acting" });
+
+    const said: string[] = [];
+    const speak = (text: string, gestures: boolean) => {
+      said.push(text);
+      return voice ? this.speakShort(text, signal, gestures) : Promise.resolve();
+    };
+    // a short "okay" while the body already moves (not with "stop": that silences the robot first; nor with "say ...")
+    const plain = !actions.some((a) => a.type === "stop" || a.type === "say");
+    let ack: Promise<void> = plain ? speak(ackWord(lang), false) : Promise.resolve();
+
+    const results: ActionResult[] = [];
+    for (let i = 0; i < actions.length && !signal.aborted; i++) {
+      const a = actions[i];
+      this.acting++;
+      try {
+        let r: ActionResult;
+        if (a.type === "say") {
+          await speak(a.text, true);
+          r = { action: a, ok: true };
+        } else r = await executeAction(act.robot, a, act.ctx, { settle: i < actions.length - 1 });
+        results.push(r);
+        this.emit("action", { action: a, result: r, index: i, source: "chat" });
+      } catch (e) {
+        const r: ActionResult = { action: a, ok: false, reason: "invalid" };
+        results.push(r);
+        this.emit("error", { message: e instanceof Error ? e.message : String(e), stage: "robot" });
+        this.emit("action", { action: a, result: r, index: i, source: "chat" });
+      } finally {
+        this.acting--;
+      }
+    }
+    if (!signal.aborted) {
+      if (actions.some((a) => a.type === "stop") && !actions.some((a) => a.type === "say")) ack = speak(ackWord(lang), false);
+      await until(ack, signal);
+      const problem = results.map((r) => failureMessage(r, lang)).find(Boolean);
+      if (problem) await until(speak(problem, false), signal);
+    }
+    if (this.ctl === ctl) {
+      this.busy = false;
+      this.ctl = null;
+    }
+    const text = said.join(" ");
+    if (signal.aborted) return { text, aborted: true, commands: results };
+    this.history.push({ role: "assistant", text: actions.map((a) => describeAction(a, lang)).join(lang === "ar" ? "، ثم " : ", then ") + (text ? ` (${text})` : "") });
+    const max = this.options.maxHistory ?? 16;
+    if (this.history.length > max) this.history.splice(0, this.history.length - max);
+    this.emit("state", { state: "idle" });
+    this.emit("answer", { text, aborted: false });
+    return { text, aborted: false, commands: results };
+  }
+
+  /** speak one short line (acknowledgement / problem report) with the same voice and mouth sync as an answer */
+  private async speakShort(text: string, signal: AbortSignal, gestures: boolean): Promise<void> {
+    const robot = this.robot;
+    const tts = this.options.tts;
+    try {
+      let pcm: Int16Array | null = null;
+      if (tts) {
+        try {
+          const r = await tts.synth(text, signal);
+          pcm = r ? toInt16(r) : null;
+        } catch (e) {
+          if (!signal.aborted) this.emit("error", { message: e instanceof Error ? e.message : String(e), stage: "tts" });
+        }
+      }
+      if (signal.aborted) return;
+      this.emit("sentence", { text, index: 0 });
+      if (pcm && tts) {
+        const s = robot.speakStream({ sampleRate: tts.sampleRate, gestures });
+        s.pushPCM16(pcm);
+        s.pushVisemes(alignedVisemes(text, pcm, tts.sampleRate));
+        s.end();
+        await until(s.finished, signal);
+        if (signal.aborted) s.stop();
+      } else {
+        const h = robot.speak({ text, gestures });
+        await until(h.finished, signal);
+        if (signal.aborted) h.stop();
+      }
+    } catch (e) {
+      if (!signal.aborted) this.emit("error", { message: e instanceof Error ? e.message : String(e), stage: "robot" });
+    }
   }
 }
 

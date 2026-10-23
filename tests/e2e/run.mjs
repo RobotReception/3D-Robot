@@ -673,6 +673,72 @@ console.log("\nGemini assistant (examples/gemini.html -> proxy -> mock Gemini AP
     return answers;
   });
 
+  await check("orders typed in the chat run at once without Gemini: move, turn, compound, stop; the log and chips show them", async () => {
+    await gp.evaluate(() => {
+      window.__cmd = [];
+      window.assistant.on("command", (e) => window.__cmd.push(["command", e.actions.map((a) => a.type).join("+")]));
+      window.assistant.on("action", (e) => window.__cmd.push(["action", e.action.type, e.result.ok, e.source]));
+      window.robot.resetPose({ position: true });
+    });
+    const histBefore = await gp.evaluate(() => window.assistant.history.length);
+    await gp.fill("#q", "تقدم للأمام متر");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.__cmd.some((c) => c[0] === "action"), null, { timeout: 90000, polling: 100 });
+    await gp.waitForFunction(() => !window.assistant.thinking, null, { timeout: 90000, polling: 100 });
+    let pos = await gp.evaluate(() => ({ x: window.robot.root.position.x, z: window.robot.root.position.z, hist: window.assistant.history.length }));
+    ok(Math.abs(pos.z - 1) < 0.25 && Math.abs(pos.x) < 0.15, "did not move forward 1 m: " + JSON.stringify(pos));
+    ok(pos.hist === histBefore + 2, "history should hold the order and its result");
+    // quick chip: turn left 90 degrees (positive yaw)
+    await gp.click("#chips button:nth-child(3)");
+    await gp.waitForFunction(() => window.__cmd.filter((c) => c[1] === "turn").length >= 1 && !window.assistant.thinking, null, { timeout: 90000, polling: 100 });
+    const yaw = await gp.evaluate(() => (window.robot.root.rotation.y * 180) / Math.PI);
+    ok(Math.abs(yaw - 90) < 6, "turn left should face +90 degrees: " + yaw);
+    // compound order
+    await gp.evaluate(() => { window.__cmd.length = 0; });
+    await gp.fill("#q", "turn right 90 degrees then wave");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.__cmd.filter((c) => c[0] === "action").length >= 2 && !window.assistant.thinking, null, { timeout: 90000, polling: 100 });
+    const seq = await gp.evaluate(() => window.__cmd.filter((c) => c[0] === "action").map((c) => c[1]));
+    ok(JSON.stringify(seq) === JSON.stringify(["turn", "gesture"]), "wrong order of actions: " + JSON.stringify(seq));
+    const lines = await gp.evaluate(() => [...document.querySelectorAll(".cmd div")].map((d) => d.textContent));
+    ok(lines.some((l) => l.startsWith("✓")), "the log should tick off finished steps: " + JSON.stringify(lines));
+    // stop in the middle of a walk
+    await gp.evaluate(() => { window.__cmd.length = 0; });
+    await gp.fill("#q", "تقدم 4 متر");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.robot.locomotion.state !== "idle", null, { timeout: 90000, polling: 50 });
+    await gp.click("#chips button:nth-child(8)"); // قف
+    await gp.waitForFunction(() => !window.assistant.thinking && window.robot.locomotion.state === "idle", null, { timeout: 90000, polling: 100 });
+    const stopped = await gp.evaluate(() => window.__cmd.map((c) => c.join(":")));
+    ok(stopped.some((c) => c.startsWith("action:stop:true")), "stop did not run: " + JSON.stringify(stopped));
+    return { pos, yaw: +yaw.toFixed(1), seq };
+  });
+
+  await check("go to the desk by name (walks round furniture), then 'go back' returns; Gemini is asked for the way and moves the robot with [action=goto:desk]", async () => {
+    await gp.evaluate(() => { window.__cmd.length = 0; window.robot.resetPose({ position: true }); });
+    await gp.fill("#q", "اذهب إلى المكتب");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.__cmd.some((c) => c[0] === "action") && !window.assistant.thinking, null, { timeout: 120000, polling: 100 });
+    let p = await gp.evaluate(() => ({ x: window.robot.root.position.x, z: window.robot.root.position.z, c: window.__cmd.map((c) => c.join(":")) }));
+    ok(Math.hypot(p.x - 0, p.z + 2.6) < 0.5, "did not reach the desk spot: " + JSON.stringify(p));
+    await gp.evaluate(() => { window.__cmd.length = 0; });
+    await gp.fill("#q", "عد إلى مكانك");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.__cmd.some((c) => c[0] === "action") && !window.assistant.thinking, null, { timeout: 120000, polling: 100 });
+    p = await gp.evaluate(() => ({ x: window.robot.root.position.x, z: window.robot.root.position.z }));
+    ok(Math.hypot(p.x, p.z) < 0.5, "did not return home: " + JSON.stringify(p));
+    // not an order: it goes to Gemini, whose reply carries an action tag
+    await gp.evaluate(() => { window.__cmd.length = 0; });
+    await gp.fill("#q", "Could you show me the way to the reception desk?");
+    await gp.click("#send");
+    await gp.waitForFunction(() => window.__cmd.some((c) => c[0] === "action" && c[3] === "llm") && !window.assistant.thinking, null, { timeout: 120000, polling: 100 });
+    const q = await gp.evaluate(() => ({ x: window.robot.root.position.x, z: window.robot.root.position.z, c: window.__cmd.map((c) => c.join(":")), last: window.assistant.history.at(-1).text }));
+    ok(q.c.includes("action:move:true:llm") === false && q.c.some((c) => c.startsWith("action:goto:true:llm")), "the model's goto did not run: " + JSON.stringify(q.c));
+    ok(!/\[|action/.test(q.last), "tag leaked into the answer: " + q.last);
+    ok(Math.hypot(q.x, q.z + 2.6) < 0.5, "robot is not at the desk: " + JSON.stringify(q));
+    return { desk: [+q.x.toFixed(2), +q.z.toFixed(2)] };
+  });
+
   await check("a failing server (quota exceeded) puts the robot in its error state with a readable message; the page stays usable", async () => {
     await gp.evaluate(async () => {
       const { ProxyChatBackend } = await import("/src/index.ts").catch(() => ({}));

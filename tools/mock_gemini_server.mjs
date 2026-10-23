@@ -10,9 +10,10 @@ export const requests = [];
 const REPLIES = {
   ar: "[gesture=greeting]أهلاً بك في جامعة الرازي. [emotion=curious]كيف أستطيع مساعدتك اليوم؟ يسعدني أن أجيب عن أسئلتك حول القبول والتخصصات.",
   en: "[gesture=greeting]Welcome to Al-Razi University. [emotion=curious]How can I help you today? I am happy to answer questions about admissions and programs!",
+  guide: "[action=goto:desk]Of course, please follow me to the reception desk. [gesture=pointing]It is right here, our staff will help you.",
   slow: "This is a long answer that keeps going so that it can be interrupted by the user. It has many sentences. Here is another sentence. And another one. And one more to be sure.",
 };
-const pick = (text) => (/slow|long/i.test(text) ? "slow" : /[ء-ي]/.test(text) ? "ar" : "en");
+const pick = (text) => (/slow|long/i.test(text) ? "slow" : /show me the way/i.test(text) ? "guide" : /[ء-ي]/.test(text) ? "ar" : "en");
 
 function tone(text, rate = 24000) {
   const n = Math.max(2400, Math.round(text.length * 0.055 * rate)); // ~18 chars per second

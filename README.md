@@ -88,6 +88,7 @@ Works with plain three.js ([examples/minimal.html](examples/minimal.html)) and R
 | Viewer (quality tiers, camera) | `src/viewer/RobotViewer.ts` | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) |
 | Control Studio | `src/studio/` | [docs/STUDIO.md](docs/STUDIO.md) |
 | **Ask a question → the robot answers (Gemini)** | `src/engine/assistant.ts`, `examples/gemini/` | [docs/GEMINI.md](docs/GEMINI.md) |
+| **Order the robot from the chat** ("move forward", "go to the desk then wave", Arabic + English, offline) | `src/engine/{chatCommands,actions}.ts` | [docs/CHAT_COMMANDS.ar.md](docs/CHAT_COMMANDS.ar.md) |
 | Tests | `tests/` | [docs/TESTING.md](docs/TESTING.md) |
 | Integration guide | | [docs/INTEGRATION.md](docs/INTEGRATION.md) |
 

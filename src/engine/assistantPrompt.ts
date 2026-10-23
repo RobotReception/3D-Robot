@@ -1,3 +1,4 @@
+import { LOBBY_PLACES } from "./actions";
 import { EMOTIONS, type EmotionName } from "./FaceController";
 
 /** Emotions an LLM may request with `[emotion=NAME]` (all robot emotions except the internal "error"). */
@@ -17,6 +18,8 @@ export interface PromptOptions {
   language?: "auto" | "ar" | "en";
   /** answer length limit in sentences */
   maxSentences?: number;
+  /** let the model move the robot with [action=...] tags (default true); pass the place names it may send the robot to */
+  actions?: boolean | { places?: string[] };
   /** extra rules / knowledge (opening hours, FAQ...) appended verbatim */
   extra?: string;
 }
@@ -41,9 +44,17 @@ export function buildSystemPrompt(o: PromptOptions = {}): string {
     `Keep answers short: at most ${max} sentences, about 40 words, unless the user asks for more detail. Start with the answer itself, no filler.`,
     "Write plain spoken text only: no markdown, bullet lists, headings, emojis, URLs or stage directions in asterisks. Write numbers and dates the way they are spoken.",
     "Use normal punctuation (commas, full stops, question marks, exclamation marks): the robot nods, raises its eyebrows and gestures on them.",
-    `You may start a sentence with at most two control tags that animate the robot. They are never spoken. Emotion: [emotion=NAME] with NAME one of ${ASSISTANT_EMOTIONS.join(", ")}. Gesture: [gesture=NAME] with NAME one of ${ASSISTANT_GESTURES.join(", ")}. Put a tag only at the very beginning of a sentence, never inside one.`,
+    `You may start a sentence with at most three control tags that animate the robot. They are never spoken. Emotion: [emotion=NAME] with NAME one of ${ASSISTANT_EMOTIONS.join(", ")}. Gesture: [gesture=NAME] with NAME one of ${ASSISTANT_GESTURES.join(", ")}. Put a tag only at the very beginning of a sentence, never inside one.`,
     "Typical use: [gesture=greeting] when greeting, [gesture=goodbye] when saying goodbye, [emotion=happy] for good news, [emotion=curious] before asking the user a question, [emotion=sad] when apologising or giving bad news, [gesture=pointing] when giving directions. Most sentences need no tag.",
+    ...(o.actions === false ? [] : [actionRules(typeof o.actions === "object" ? o.actions.places : undefined)]),
     "If you do not know something, say so briefly and offer what you can do. Never invent facts about the organisation.",
     o.extra ? o.extra : "",
   ].filter(Boolean).join("\n");
+}
+
+function actionRules(places = Object.keys(LOBBY_PLACES)): string {
+  return [
+    `You can also move the robot with [action=...] tags, placed at the start of a sentence like the others (never spoken, the move starts when that sentence is spoken): [action=forward:2] [action=back:1] [action=left:1] [action=right:1] (metres), [action=turn_left:90] [action=turn_right:90] (degrees), [action=goto:PLACE] with PLACE one of ${places.join(", ")}, [action=home] (back to your starting spot), [action=look:user|left|right|up|down|forward], [action=point:left|right|forward|PLACE].`,
+    "Use them only when the user asks you to move or show something, or when you guide a visitor (for example [action=goto:desk] together with \"Please follow me to the reception desk.\"). Never move on your own otherwise, and never claim to have moved without a tag. Plain orders like \"move forward\" are normally handled before they reach you.",
+  ].join(" ");
 }

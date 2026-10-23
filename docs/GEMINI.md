@@ -69,6 +69,9 @@ npm run dev                                                                 # ن
 |---|---|---|
 | `[emotion=NAME]` | `neutral happy friendly content curious thinking sad surprised angry` | `[emotion=sad]أعتذر، لا أملك هذه المعلومة.` |
 | `[gesture=NAME]` | `greeting goodbye pointing nod shake bow happy surprised` | `[gesture=greeting]أهلاً بك في جامعة الرازي.` |
+| `[action=...]` | `forward:2` `turn_left:90` `goto:desk` `home` `look:user` `point:left` … | `[action=goto:desk]تفضل معي إلى مكتب الاستقبال.` |
+
+وسوم `[action=…]` تحرّك الروبوت فعلاً (يمشي حول الأثاث دون اختراقه). والأوامر المكتوبة البسيطة («تقدم مترين») تُنفَّذ محلياً دون المرور بـ Gemini؛ التفاصيل في **[CHAT_COMMANDS.ar.md](CHAT_COMMANDS.ar.md)**.
 
 - الوسوم **لا تُنطق ولا تظهر** في النص ولا في السياق. أسماء غير معروفة تُتجاهل بصمت. الوسم قد يصل مقسوماً بين جزأين من البث (يُعالَج).
 - **علامات الترقيم مهمة**: الروبوت يومئ على الفاصلة والنقطة، ويرفع رأسه وحاجبيه عند «؟»، ويؤكد عند «!». لذلك يطلب الـ prompt ترقيماً طبيعياً.
@@ -258,20 +261,23 @@ new RobotAssistant(robot, {
   maxHistory?: number,          // الافتراضي 16 رسالة
   prefetch?: number,            // طلبات TTS المتوازية، الافتراضي 2
   language?: string,            // يُرسل للخادم ("ar" | "en")
+  commands?: false | { places, home, maxMeters, voice, userTarget },  // أوامر الشات المحلية (انظر CHAT_COMMANDS.ar.md)
 });
-await assistant.ask(text): Promise<{ text, aborted, error? }>
-assistant.cancel()              // مقاطعة + عودة للاستعداد
+await assistant.ask(text, { commands?: false }): Promise<{ text, aborted, error?, commands? }>
+assistant.cancel({ motion?: false })  // مقاطعة + عودة للاستعداد (يوقف المشي أيضاً ما لم تمنع ذلك)
 assistant.reset()               // مسح السياق
 assistant.history               // [{ role, text }]
 assistant.thinking              // true أثناء الإجابة
-assistant.on("state" | "sentence" | "tag" | "answer" | "error", fn)   // يعيد دالة إلغاء الاشتراك
+assistant.on("state" | "sentence" | "tag" | "answer" | "error" | "command" | "action", fn)   // يعيد دالة إلغاء الاشتراك
 ```
 
 | حدث | بيانات |
 |---|---|
-| `state` | `{ state: "thinking" \| "speaking" \| "idle" \| "error" }` |
+| `state` | `{ state: "thinking" \| "speaking" \| "acting" \| "idle" \| "error" }` |
+| `command` | `{ text, actions, lang }` فُهمت رسالتك كأمر (قبل التنفيذ) |
+| `action` | `{ action, result, index, source: "chat" \| "llm" }` انتهت خطوة (مع `result.ok` / `reason`) |
 | `sentence` | `{ text, index }` عند **بدء نطق** الجملة |
-| `tag` | `{ tag: { name: "emotion"\|"gesture", value }, at }` عند تنفيذ الوسم |
+| `tag` | `{ tag: { name: "emotion"\|"gesture"\|"action", value }, at }` عند تنفيذ الوسم |
 | `answer` | `{ text, aborted }` عند الانتهاء (أو المقاطعة) |
 | `error` | `{ message, stage: "chat" \| "tts" \| "robot" }` |
 
